@@ -1175,7 +1175,9 @@ export default function App() {
   // - "/untuk/:id" → ReceiverPage (via link)
   // - "/admin-x7k9p2" → AdminPage (URL tersembunyi)
 
-  const [page,setPage]=useState("sender"); // "sender" | "admin" | "demo-receiver"
+  const [page,setPage]=useState(() => (
+    window.location.pathname === "/admin-x7k9p2" ? "admin" : "sender"
+  )); // "sender" | "admin" | "demo-receiver"
 
   // Simulasi: tombol hidden untuk demo admin & receiver
   return (
