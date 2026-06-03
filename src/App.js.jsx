@@ -117,6 +117,11 @@ const timeLeft = iso => { const d=new Date(iso)-new Date(); if(d<=0)return null;
 const getCD    = iso => { const d=Math.max(0,new Date(iso)-new Date()); return {d:Math.floor(d/86400000),h:Math.floor((d%86400000)/3600000),m:Math.floor((d%3600000)/60000),s:Math.floor((d%60000)/1000)}; };
 const themeOf  = c   => THEMES.find(t=>t.id===c.theme)||THEMES[0];
 const rtOf     = c   => RECIPIENT_TYPES.find(r=>r.id===c.recipientType)||RECIPIENT_TYPES[0];
+const slugOf   = c   => `${c.to.split(" ")[0].toLowerCase()}-${c.id}`;
+const recipientPath = c => `/untuk/${slugOf(c)}`;
+const recipientLink = c => `${window.location.origin}${recipientPath(c)}`;
+function readCapsules(){ try { return JSON.parse(localStorage.getItem("timecapsule_capsules")) || DEMO_CAPSULES; } catch { return DEMO_CAPSULES; } }
+function findCapsuleBySlug(slug){ return readCapsules().find(c=>slugOf(c)===slug) || null; }
 function validateFile(f){ if(!ALLOWED_IMG.includes(f.type)) return "Format tidak didukung. Hanya JPG, PNG, GIF, WEBP."; if(f.size>MAX_FILE_SIZE) return "Ukuran maks 5MB."; const ext=f.name.split(".").pop().toLowerCase(); if(["mp4","mov","avi","mkv","webm","flv"].includes(ext)) return "Upload video tidak diizinkan."; return null; }
 
 /* ═══════════ CSS ═══════════ */
@@ -571,7 +576,7 @@ function ReportModal({ onClose }) {
 function NotifModal({ capsule, onClose }) {
   const [tab,setTab]=useState("email");
   const theme = themeOf(capsule);
-  const waText = `Halo *${capsule.to}*! 👋\n\n*${capsule.from}* ${capsule.company?`dari *${capsule.company}* `:""}mengirimkan *Time Capsule* spesial untukmu! 📦\n\nTerbuka pada:\n📅 *${fmtLong(capsule.openAt)}*\n\n🔗 https://timecapsule.id/untuk/${capsule.to.split(" ")[0].toLowerCase()}-${capsule.id}\n\n_Pesan resmi via TimeCapsule._`;
+  const waText = `Halo *${capsule.to}*! 👋\n\n*${capsule.from}* ${capsule.company?`dari *${capsule.company}* `:""}mengirimkan *Time Capsule* spesial untukmu! 📦\n\nTerbuka pada:\n📅 *${fmtLong(capsule.openAt)}*\n\n🔗 ${recipientLink(capsule)}\n\n_Pesan resmi via TimeCapsule._`;
 
   return (
     <div className="overlay" onClick={onClose}>
@@ -622,8 +627,8 @@ function NotifModal({ capsule, onClose }) {
 /* ═══════════════════ LINK MODAL ═══════════════════ */
 function LinkModal({ capsule, onClose, onPreview, onNotif }) {
   const [copied,setCopied]=useState(false);
-  const link = `timecapsule.id/untuk/${capsule.to.split(" ")[0].toLowerCase()}-${capsule.id}`;
-  function copy(){ setCopied(true); setTimeout(()=>setCopied(false),2000); }
+  const link = recipientLink(capsule);
+  function copy(){ navigator.clipboard?.writeText(link); setCopied(true); setTimeout(()=>setCopied(false),2000); }
   return (
     <div className="overlay" onClick={onClose}>
       <div className="modal" style={{maxWidth:400}} onClick={e=>e.stopPropagation()}>
@@ -917,12 +922,14 @@ function AboutPage({ onStart }) {
 /* ═══════════════════ SENDER APP ═══════════════════ */
 function SenderApp() {
   const [tab,setTab]=useState("home");
-  const [capsules,setCapsules]=useState(DEMO_CAPSULES);
+  const [capsules,setCapsules]=useState(readCapsules);
   const [showSuccess,setShowSuccess]=useState(false);
   const [linkModal,setLinkModal]=useState(null);
   const [notifModal,setNotifModal]=useState(null);
   const [viewing,setViewing]=useState(null);
   const readyCount = capsules.filter(c=>isReady(c.openAt)).length;
+
+  useEffect(()=>{ localStorage.setItem("timecapsule_capsules", JSON.stringify(capsules)); },[capsules]);
 
   if (viewing) return (
     <>
@@ -1180,6 +1187,10 @@ export default function App() {
   // - "/untuk/:id" → ReceiverPage (via link)
   // - "/admin-x7k9p2" → AdminPage (URL tersembunyi)
 
+  const receiverSlug = window.location.pathname.startsWith("/untuk/")
+    ? window.location.pathname.split("/").pop()
+    : null;
+  const receiverCapsule = receiverSlug ? findCapsuleBySlug(receiverSlug) : null;
   const [page,setPage]=useState(() => (
     window.location.pathname === "/admin-x7k9p2" ? "admin" : "sender"
   )); // "sender" | "admin" | "demo-receiver"
@@ -1187,6 +1198,14 @@ export default function App() {
   // Simulasi: tombol hidden untuk demo admin & receiver
   return (
     <>
+      {receiverCapsule && (
+        <>
+          <style>{css}</style>
+          <ReceiverPage capsule={receiverCapsule} onBack={()=>{ window.location.href="/"; }}/>
+        </>
+      )}
+      {!receiverCapsule && (
+        <>
       {page==="sender" && <SenderApp/>}
       {page==="admin" && <AdminPage/>}
       {page==="demo-receiver" && (
@@ -1196,6 +1215,8 @@ export default function App() {
             capsule={{...DEMO_CAPSULES[1], openAt:new Date(Date.now()-3600000).toISOString()}}
             onBack={()=>setPage("sender")}
           />
+        </>
+      )}
         </>
       )}
 
