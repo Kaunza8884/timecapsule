@@ -1193,7 +1193,7 @@ export default function App() {
       )}
 
       {/* DEMO SWITCHER — hanya untuk preview, tidak ada di produksi */}
-      <div style={{position:"fixed",bottom:0,left:0,right:0,background:"rgba(15,14,12,.92)",borderTop:"1px solid rgba(201,168,76,.2)",padding:"8px 16px",display:"flex",alignItems:"center",justifyContent:"center",gap:8,zIndex:500,flexWrap:"wrap"}}>
+      {process.env.NODE_ENV === "development" && <div style={{position:"fixed",bottom:0,left:0,right:0,background:"rgba(15,14,12,.92)",borderTop:"1px solid rgba(201,168,76,.2)",padding:"8px 16px",display:"flex",alignItems:"center",justifyContent:"center",gap:8,zIndex:500,flexWrap:"wrap"}}>
         <span style={{fontSize:10,color:"#6B6560",fontWeight:600,textTransform:"uppercase",letterSpacing:1}}>Preview Mode:</span>
         <button onClick={()=>setPage("sender")} style={{padding:"5px 12px",borderRadius:6,border:"1.5px solid",borderColor:page==="sender"?"#C9A84C":"#374151",background:page==="sender"?"#C9A84C":"transparent",color:page==="sender"?"#0F0E0C":"#9A9089",fontSize:11,fontWeight:600,cursor:"pointer",fontFamily:"'Outfit',sans-serif"}}>
           ✉️ Pengirim
@@ -1204,7 +1204,7 @@ export default function App() {
         <button onClick={()=>setPage("admin")} style={{padding:"5px 12px",borderRadius:6,border:"1.5px solid",borderColor:page==="admin"?"#6B7280":"#374151",background:page==="admin"?"#374151":"transparent",color:page==="admin"?"#F9FAFB":"#9A9089",fontSize:11,fontWeight:600,cursor:"pointer",fontFamily:"'Outfit',sans-serif"}}>
           🔧 Admin (pw: timecapsule2025)
         </button>
-      </div>
+      </div>}
     </>
   );
 }
