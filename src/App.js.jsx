@@ -424,6 +424,8 @@ textarea{resize:vertical;min-height:90px;line-height:1.6;}
 .login-sub{font-size:11px;color:#6B7280;margin-bottom:20px;line-height:1.6;}
 .login-inp{width:100%;padding:10px 13px;border:1.5px solid #374151;border-radius:8px;background:#111827;color:#F9FAFB;font-size:13px;font-family:'Outfit',sans-serif;outline:none;margin-bottom:9px;transition:border-color .18s;}
 .login-inp:focus{border-color:#6B7280;}
+.login-show{width:100%;padding:7px 10px;margin-bottom:9px;background:transparent;color:#D1D5DB;border:1px solid #374151;border-radius:8px;font-size:11px;font-weight:600;cursor:pointer;font-family:'Outfit',sans-serif;transition:all .2s;}
+.login-show:hover{border-color:#6B7280;color:#F9FAFB;}
 .login-btn{width:100%;padding:11px;background:#374151;color:#F9FAFB;border:none;border-radius:8px;font-size:13px;font-weight:600;cursor:pointer;font-family:'Outfit',sans-serif;transition:all .2s;}
 .login-btn:hover{background:#4B5563;}
 .login-err{background:#450a0a;border:1px solid #991b1b;color:#fca5a5;font-size:11px;padding:8px 12px;border-radius:7px;margin-top:9px;animation:fadeIn .25s ease;}
@@ -1050,7 +1052,7 @@ function SenderApp() {
 
 /* ═══════════════════ ADMIN ═══════════════════ */
 function AdminLogin({ onLogin }) {
-  const [pass,setPass]=useState(""); const [err,setErr]=useState("");
+  const [pass,setPass]=useState(""); const [err,setErr]=useState(""); const [showPass,setShowPass]=useState(false);
   function tryLogin(){ if(pass===ADMIN_PASSWORD){ onLogin(); } else { setErr("Password salah. Akses ditolak."); setPass(""); } }
   return (
     <div className="admin-login-pg">
@@ -1059,7 +1061,10 @@ function AdminLogin({ onLogin }) {
         <div className="login-ico">🔐</div>
         <div className="login-ttl">Admin Access</div>
         <div className="login-sub">Halaman ini hanya untuk administrator TimeCapsule.</div>
-        <input className="login-inp" type="password" placeholder="Password admin" value={pass} onChange={e=>setPass(e.target.value)} onKeyDown={e=>e.key==="Enter"&&tryLogin()}/>
+        <input className="login-inp" type={showPass ? "text" : "password"} placeholder="Password admin" value={pass} onChange={e=>setPass(e.target.value)} onKeyDown={e=>e.key==="Enter"&&tryLogin()}/>
+        <button type="button" className="login-show" onClick={()=>setShowPass(v=>!v)}>
+          {showPass ? "Sembunyikan password" : "Tampilkan password"}
+        </button>
         <button className="login-btn" onClick={tryLogin}>Masuk →</button>
         {err && <div className="login-err">🚫 {err}</div>}
         <div className="login-hint">URL halaman ini bersifat rahasia.<br/>Jangan bagikan ke siapapun.</div>
