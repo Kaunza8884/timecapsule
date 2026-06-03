@@ -1,6 +1,8 @@
 import { useState, useEffect, useRef } from "react";
 
 const ADMIN_PASSWORD = "timecapsule2025";
+const SENDER_ACCESS_CODE = "sfc2025";
+const DEFAULT_CREDITS = 100;
 
 const THEMES = [
   { id:"birthday",   emoji:"🎂", label:"Ulang Tahun",       bg:"#FFF7ED", accent:"#EA580C", particle:"🎈" },
@@ -119,7 +121,7 @@ const themeOf  = c   => THEMES.find(t=>t.id===c.theme)||THEMES[0];
 const rtOf     = c   => RECIPIENT_TYPES.find(r=>r.id===c.recipientType)||RECIPIENT_TYPES[0];
 const slugOf   = c   => `${c.to.split(" ")[0].toLowerCase()}-${c.id}`;
 const recipientPath = c => `/untuk/${slugOf(c)}`;
-const recipientLink = c => `${window.location.origin}${recipientPath(c)}`;
+const recipientLink = c => c.recipientUrl || `${window.location.origin}${recipientPath(c)}`;
 function readCapsules(){ try { return JSON.parse(localStorage.getItem("timecapsule_capsules")) || DEMO_CAPSULES; } catch { return DEMO_CAPSULES; } }
 function findCapsuleBySlug(slug){ return readCapsules().find(c=>slugOf(c)===slug) || null; }
 function validateFile(f){ if(!ALLOWED_IMG.includes(f.type)) return "Format tidak didukung. Hanya JPG, PNG, GIF, WEBP."; if(f.size>MAX_FILE_SIZE) return "Ukuran maks 5MB."; const ext=f.name.split(".").pop().toLowerCase(); if(["mp4","mov","avi","mkv","webm","flv"].includes(ext)) return "Upload video tidak diizinkan."; return null; }
@@ -737,12 +739,13 @@ function ReceiverPage({ capsule, onBack }) {
 }
 
 /* ═══════════════════ CREATE FORM ═══════════════════ */
-function CreateForm({ setCapsules, onSuccess }) {
+function CreateForm({ setCapsules, onSuccess, credits, spendCredit }) {
   const [form,setForm]=useState({to:"",email:"",from:"",company:"",message:"",openAt:"",theme:"birthday",recipientType:"personal",msgMode:"tulis"});
   const [images,setImages]=useState([]); const [fileErr,setFileErr]=useState(""); const [selTpl,setSelTpl]=useState(null);
+  const [sendErr,setSendErr]=useState(""); const [submitting,setSubmitting]=useState(false);
   const fileRef = useRef();
   const fc = e => setForm(f=>({...f,[e.target.name]:e.target.value}));
-  const canSend = form.to && form.message && form.openAt;
+  const canSend = form.to && form.message && form.openAt && credits > 0;
   const tpls = TEMPLATES[form.theme] || [];
 
   function handleUpload(e) {
@@ -751,16 +754,43 @@ function CreateForm({ setCapsules, onSuccess }) {
     e.target.value="";
   }
 
-  function send() {
+  async function send() {
     if (!canSend) return;
+    setSendErr("");
+    setSubmitting(true);
+    if (!spendCredit()) { setSubmitting(false); return; }
     const c = { id:Date.now(), from:form.from||"Pengirim", company:form.company, to:form.to, email:form.email, message:form.message, theme:form.theme, openAt:form.openAt, images:images.map(i=>i.url), recipientType:form.recipientType };
+    if (form.email && form.email.includes("@")) {
+      try {
+        const res = await fetch("/.netlify/functions/create-capsule", {
+          method: "POST",
+          headers: {"Content-Type":"application/json"},
+          body: JSON.stringify({
+            accessCode: sessionStorage.getItem("timecapsule_sender_access"),
+            capsule: c,
+            recipients: [{ name: form.to, email: form.email }],
+          }),
+        });
+        if (res.ok) {
+          const data = await res.json();
+          const saved = data.capsules?.[0];
+          if (saved?.recipient_url) c.recipientUrl = saved.recipient_url;
+        } else if (res.status !== 501) {
+          const data = await res.json().catch(()=>({error:"Gagal menyimpan ke backend"}));
+          setSendErr(data.error || "Gagal menyimpan ke backend. Capsule tetap dibuat sebagai demo lokal.");
+        }
+      } catch {
+        setSendErr("Backend belum tersedia. Capsule dibuat sebagai demo lokal.");
+      }
+    }
     setCapsules(p=>[c,...p]); setForm(f=>({...f,to:"",email:"",message:"",openAt:""})); setImages([]); setSelTpl(null); onSuccess();
+    setSubmitting(false);
   }
 
   return (
-    <div className="wrap">
-      <div className="pg-title">Buat Capsule Baru</div>
-      <div className="pg-sub">Tulis pesan yang akan dikenang selamanya</div>
+      <div className="wrap">
+        <div className="pg-title">Buat Capsule Baru</div>
+        <div className="pg-sub">Tulis pesan yang akan dikenang selamanya · Sisa kredit: {credits}</div>
 
       <div className="card">
         <div className="card-ttl">👥 Untuk siapa?</div><div className="card-sub">Pilih kategori penerima</div>
@@ -825,7 +855,8 @@ function CreateForm({ setCapsules, onSuccess }) {
         {form.openAt && <div className="dt-box">🔒 Terkunci hingga {fmtLong(form.openAt)}</div>}
       </div>
 
-      <button className="btn-main" onClick={send} disabled={!canSend}>📦 Kirim Capsule {themeOf(form).emoji}</button>
+      <button className="btn-main" onClick={send} disabled={!canSend || submitting}>{submitting ? "Menyimpan..." : credits > 0 ? `📦 Kirim Capsule ${themeOf(form).emoji}` : "Kredit habis - hubungi admin"}</button>
+      {sendErr && <div className="file-err" style={{marginTop:8}}>{sendErr}</div>}
     </div>
   );
 }
@@ -920,9 +951,10 @@ function AboutPage({ onStart }) {
 }
 
 /* ═══════════════════ SENDER APP ═══════════════════ */
-function SenderApp() {
+function SenderApp({ accessCode }) {
   const [tab,setTab]=useState("home");
   const [capsules,setCapsules]=useState(readCapsules);
+  const [credits,setCredits]=useState(() => Number(localStorage.getItem("timecapsule_sender_credits")) || DEFAULT_CREDITS);
   const [showSuccess,setShowSuccess]=useState(false);
   const [linkModal,setLinkModal]=useState(null);
   const [notifModal,setNotifModal]=useState(null);
@@ -930,6 +962,13 @@ function SenderApp() {
   const readyCount = capsules.filter(c=>isReady(c.openAt)).length;
 
   useEffect(()=>{ localStorage.setItem("timecapsule_capsules", JSON.stringify(capsules)); },[capsules]);
+  useEffect(()=>{ localStorage.setItem("timecapsule_sender_credits", String(credits)); },[credits]);
+
+  function spendCredit() {
+    if (credits <= 0) return false;
+    setCredits(c=>c-1);
+    return true;
+  }
 
   if (viewing) return (
     <>
@@ -960,6 +999,7 @@ function SenderApp() {
           <button className={`nb ${tab==="home"?"on":""}`} onClick={()=>setTab("home")}>🏠 Beranda</button>
           <button className={`nb ${tab==="create"?"on":""}`} onClick={()=>setTab("create")}>+ Buat</button>
           <button className={`nb ${tab==="inbox"?"on":""}`} onClick={()=>setTab("inbox")}>Kapsulku{readyCount>0&&<span className="npill">{readyCount}</span>}</button>
+          <button className="nb" style={{opacity:.9}}>Kredit {credits}</button>
           <button className={`nb ${tab==="about"?"on":""}`} onClick={()=>setTab("about")} style={{opacity:.6,fontSize:10}}>ℹ️ Info</button>
         </nav>
       </header>
@@ -1008,7 +1048,7 @@ function SenderApp() {
         </div>
       )}
 
-      {tab==="create" && <CreateForm setCapsules={setCapsules} onSuccess={()=>{setShowSuccess(true);setTab("inbox");}}/>}
+      {tab==="create" && <CreateForm setCapsules={setCapsules} onSuccess={()=>{setShowSuccess(true);setTab("inbox");}} credits={credits} spendCredit={spendCredit}/>}
 
       {tab==="inbox" && (
         <div className="wrap">
@@ -1179,6 +1219,62 @@ function AdminPage() {
   return <AdminPanel onLogout={()=>setLoggedIn(false)}/>;
 }
 
+function ReceiverRoute({ slug }) {
+  const [capsule,setCapsule]=useState(()=>findCapsuleBySlug(slug));
+  const [loading,setLoading]=useState(!capsule);
+  const [err,setErr]=useState("");
+
+  useEffect(()=>{
+    let alive = true;
+    async function load() {
+      try {
+        const res = await fetch(`/.netlify/functions/get-capsule?slug=${encodeURIComponent(slug)}`);
+        if (!alive) return;
+        if (res.ok) setCapsule(await res.json());
+        else setErr("Capsule tidak ditemukan atau backend belum aktif.");
+      } catch {
+        if (alive) setErr("Gagal mengambil capsule.");
+      } finally {
+        if (alive) setLoading(false);
+      }
+    }
+    load();
+    return()=>{ alive=false; };
+  },[slug]);
+
+  if (loading) return <><style>{css}</style><div className="admin-login-pg"><div className="login-card"><div className="login-ico">📦</div><div className="login-ttl">Membuka Capsule</div><div className="login-sub">Sebentar, kami mengambil pesanmu...</div></div></div></>;
+  if (!capsule) return <><style>{css}</style><div className="admin-login-pg"><div className="login-card"><div className="login-ico">🔎</div><div className="login-ttl">Capsule Tidak Ditemukan</div><div className="login-sub">{err || "Link ini tidak valid."}</div><button className="login-btn" onClick={()=>{window.location.href="/";}}>Kembali</button></div></div></>;
+  return <><style>{css}</style><ReceiverPage capsule={capsule} onBack={()=>{ window.location.href="/"; }}/></>;
+}
+
+function SenderAccessGate({ onLogin }) {
+  const [code,setCode]=useState("");
+  const [err,setErr]=useState("");
+  function tryLogin() {
+    if (code === SENDER_ACCESS_CODE) {
+      sessionStorage.setItem("timecapsule_sender_access", code);
+      onLogin(code);
+    } else {
+      setErr("Kode akses salah. Hubungi admin untuk memakai TimeCapsule.");
+      setCode("");
+    }
+  }
+  return (
+    <div className="admin-login-pg">
+      <style>{css}</style>
+      <div className="login-card">
+        <div className="login-ico">🔑</div>
+        <div className="login-ttl">Akses Pengirim</div>
+        <div className="login-sub">Masukkan kode akses untuk membuat dan mengirim capsule.</div>
+        <input className="login-inp" type="password" placeholder="Kode akses" value={code} onChange={e=>setCode(e.target.value)} onKeyDown={e=>e.key==="Enter"&&tryLogin()}/>
+        <button className="login-btn" onClick={tryLogin}>Masuk →</button>
+        {err && <div className="login-err">🚫 {err}</div>}
+        <div className="login-hint">Akses ini dibatasi agar tidak semua orang bisa membuat capsule.</div>
+      </div>
+    </div>
+  );
+}
+
 /* ═══════════════════ ROOT APP ═══════════════════ */
 export default function App() {
   // Simulasi routing sederhana via state
@@ -1190,23 +1286,18 @@ export default function App() {
   const receiverSlug = window.location.pathname.startsWith("/untuk/")
     ? window.location.pathname.split("/").pop()
     : null;
-  const receiverCapsule = receiverSlug ? findCapsuleBySlug(receiverSlug) : null;
   const [page,setPage]=useState(() => (
     window.location.pathname === "/admin-x7k9p2" ? "admin" : "sender"
   )); // "sender" | "admin" | "demo-receiver"
+  const [senderAccess,setSenderAccess]=useState(() => sessionStorage.getItem("timecapsule_sender_access") || "");
 
   // Simulasi: tombol hidden untuk demo admin & receiver
   return (
     <>
-      {receiverCapsule && (
+      {receiverSlug && <ReceiverRoute slug={receiverSlug}/>}
+      {!receiverSlug && (
         <>
-          <style>{css}</style>
-          <ReceiverPage capsule={receiverCapsule} onBack={()=>{ window.location.href="/"; }}/>
-        </>
-      )}
-      {!receiverCapsule && (
-        <>
-      {page==="sender" && <SenderApp/>}
+      {page==="sender" && (senderAccess ? <SenderApp accessCode={senderAccess}/> : <SenderAccessGate onLogin={setSenderAccess}/>)}
       {page==="admin" && <AdminPage/>}
       {page==="demo-receiver" && (
         <>
