@@ -145,8 +145,10 @@ body{font-family:'Outfit',sans-serif;background:#F7F4EF;color:#0F0E0C;min-height
 
 /* HEADER */
 .hdr{height:56px;display:flex;align-items:center;justify-content:space-between;padding:0 24px;position:sticky;top:0;z-index:99;background:#0F0E0C;border-bottom:2px solid #C9A84C;}
-.hdr-logo{font-family:'Cormorant Garamond',serif;font-size:19px;color:#C9A84C;letter-spacing:1.5px;cursor:pointer;flex-shrink:0;}
-.hdr-logo span{color:#D6CFC7;font-style:italic;}
+.hdr-logo{width:142px;height:42px;background:#fff;border-radius:6px;overflow:hidden;cursor:pointer;flex-shrink:0;position:relative;}
+.hdr-logo img{position:absolute;width:142px;height:142px;left:0;top:-84px;object-fit:cover;}
+.brand-logo-full{display:block;width:min(210px,72vw);height:auto;margin:0 auto 16px;border-radius:8px;}
+.login-brand-logo{display:block;width:150px;height:auto;margin:0 auto 14px;border-radius:8px;}
 .nav{display:flex;gap:3px;flex-wrap:wrap;}
 .nb{padding:5px 11px;border-radius:6px;border:1.5px solid transparent;background:transparent;color:rgba(201,168,76,.65);font-size:11px;font-weight:500;cursor:pointer;font-family:'Outfit',sans-serif;transition:all .2s;white-space:nowrap;}
 .nb:hover{color:#C9A84C;border-color:rgba(201,168,76,.35);}
@@ -438,7 +440,8 @@ textarea{resize:vertical;min-height:90px;line-height:1.6;}
 .login-err{background:#450a0a;border:1px solid #991b1b;color:#fca5a5;font-size:11px;padding:8px 12px;border-radius:7px;margin-top:9px;animation:fadeIn .25s ease;}
 .login-hint{margin-top:14px;font-size:10px;color:#4B5563;line-height:1.6;}
 .adm-hdr{background:#111827;border-bottom:1px solid #374151;height:52px;display:flex;align-items:center;justify-content:space-between;padding:0 22px;position:sticky;top:0;z-index:99;}
-.adm-logo{font-family:'Cormorant Garamond',serif;font-size:15px;color:#9CA3AF;}
+.adm-logo{display:flex;align-items:center;gap:8px;color:#D1D5DB;font-size:13px;font-weight:600;}
+.adm-logo img{width:34px;height:34px;object-fit:cover;border-radius:6px;}
 .adm-badge{background:#374151;color:#D1D5DB;font-size:9px;font-weight:600;padding:2px 9px;border-radius:20px;}
 .adm-logout{background:transparent;border:1px solid #374151;color:#6B7280;padding:4px 10px;border-radius:6px;font-size:10px;cursor:pointer;font-family:'Outfit',sans-serif;}
 .adm-logout:hover{border-color:#6B7280;color:#9CA3AF;}
@@ -578,7 +581,7 @@ function ReportModal({ onClose }) {
 function NotifModal({ capsule, onClose }) {
   const [tab,setTab]=useState("email");
   const theme = themeOf(capsule);
-  const waText = `Halo *${capsule.to}*! 👋\n\n*${capsule.from}* ${capsule.company?`dari *${capsule.company}* `:""}mengirimkan *Time Capsule* spesial untukmu! 📦\n\nTerbuka pada:\n📅 *${fmtLong(capsule.openAt)}*\n\n🔗 ${recipientLink(capsule)}\n\n_Pesan resmi via TimeCapsule._`;
+  const waText = `Halo *${capsule.to}*! 👋\n\n*${capsule.from}* ${capsule.company?`dari *${capsule.company}* `:""}mengirimkan *CapsuleMe* spesial untukmu! 📦\n\nTerbuka pada:\n📅 *${fmtLong(capsule.openAt)}*\n\n🔗 ${recipientLink(capsule)}\n\n_Pesan resmi via CapsuleMe._`;
 
   return (
     <div className="overlay" onClick={onClose}>
@@ -593,7 +596,7 @@ function NotifModal({ capsule, onClose }) {
             <div className="email-shell">
               <div className="email-bar"><div className="edot" style={{background:"#FF5F57"}}/><div className="edot" style={{background:"#FEBC2E"}}/><div className="edot" style={{background:"#28C840"}}/><span style={{marginLeft:7,fontSize:10,color:"#666"}}>Kotak Masuk</span></div>
               <div className="email-meta">
-                <div className="emrow"><span className="emlbl">Dari:</span><span>noreply@timecapsule.id</span></div>
+                <div className="emrow"><span className="emlbl">Dari:</span><span>noreply@capsuleme.app</span></div>
                 <div className="emrow"><span className="emlbl">Ke:</span><span>{capsule.email||capsule.to}</span></div>
                 <div className="emrow"><span className="emlbl">Hal:</span><span style={{fontWeight:600}}>📦 Ada Capsule dari {capsule.from}</span></div>
               </div>
@@ -605,15 +608,15 @@ function NotifModal({ capsule, onClose }) {
                   <div style={{fontSize:11,color:"#444",lineHeight:1.7,marginBottom:10}}><strong>{capsule.from}</strong>{capsule.company?` dari ${capsule.company}`:""} menyiapkan sesuatu spesial untukmu.</div>
                   <div className="email-locked-box"><div style={{fontSize:22,marginBottom:4}}>🔒</div><div style={{fontSize:10,color:"#6B6560"}}>Terbuka pada</div><div style={{fontSize:12,fontWeight:700,marginTop:3}}>{fmtLong(capsule.openAt)}</div></div>
                   <div style={{textAlign:"center",marginBottom:11}}><span className="email-cta2">🎁 Lihat Capsuleku</span></div>
-                  <div className="email-trust2">🛡️ Dikirim resmi via TimeCapsule. Tidak perlu login.</div>
+                  <div className="email-trust2">🛡️ Dikirim resmi via CapsuleMe. Tidak perlu login.</div>
                 </div>
-                <div className="email-footer2"><div>© 2025 TimeCapsule</div><div>timecapsule.id</div></div>
+                <div className="email-footer2"><div>© 2026 CapsuleMe</div><div>capsuleme.netlify.app</div></div>
               </div>
             </div>
           )}
           {tab==="wa" && (
             <div className="wa-shell">
-              <div className="wa-top"><div className="wa-av">TC</div><div><div className="wa-nm">TimeCapsule Official</div><div className="wa-st">Business Account</div></div><span className="wa-vf">✓ Resmi</span></div>
+              <div className="wa-top"><div className="wa-av">CM</div><div><div className="wa-nm">CapsuleMe Official</div><div className="wa-st">Business Account</div></div><span className="wa-vf">✓ Resmi</span></div>
               <div className="wa-body">
                 <div className="wa-bubble"><div className="wa-txt">{waText}</div><div className="wa-time">09:00 ✓✓</div></div>
                 <div className="wa-hint">⚠️ Centang hijau resmi memerlukan <strong>WhatsApp Business API</strong> (Fonnte/Wablas).</div>
@@ -673,7 +676,7 @@ function ReceiverPage({ capsule, onBack }) {
       {showReport && <ReportModal onClose={()=>setShowReport(false)}/>}
       <div className="trust-bar">
         <span>🔐</span>
-        <span className="tb-txt">Dikirim resmi oleh <strong>{senderLabel}</strong> via TimeCapsule</span>
+        <span className="tb-txt">Dikirim resmi oleh <strong>{senderLabel}</strong> via CapsuleMe</span>
         <span className="tb-vf">✓ Terverifikasi</span>
         <button className="tb-back" onClick={onBack}>← Kembali</button>
       </div>
@@ -691,7 +694,7 @@ function ReceiverPage({ capsule, onBack }) {
                 <p className="lk-msg"><strong>{capsule.from}</strong> menyimpan pesan istimewa untukmu. Sabar ya 🌟</p>
                 <div className="cd-grid">{[{v:cd.d,l:"Hari"},{v:cd.h,l:"Jam"},{v:cd.m,l:"Menit"},{v:cd.s,l:"Detik"}].map(({v,l})=><div key={l} className="cd-cell"><div className="cd-n">{String(v).padStart(2,"0")}</div><div className="cd-l">{l}</div></div>)}</div>
                 <div className="open-row">📅 Terbuka pada <strong>{fmtLong(capsule.openAt)}</strong></div>
-                <div className="safe-row"><div className="safe-ico">🛡️</div><div className="safe-txt"><strong>Ini bukan spam.</strong> Pesan resmi via TimeCapsule. Tidak ada data yang diminta.</div></div>
+                <div className="safe-row"><div className="safe-ico">🛡️</div><div className="safe-txt"><strong>Ini bukan spam.</strong> Pesan resmi via CapsuleMe. Tidak ada data yang diminta.</div></div>
                 <div style={{marginTop:10,textAlign:"center"}}><button className="report-b" onClick={()=>setShowReport(true)}>🚩 Laporkan Konten</button></div>
               </div>
             </div>
@@ -726,7 +729,7 @@ function ReceiverPage({ capsule, onBack }) {
                 <div className="op-msg">{capsule.message}</div>
                 {capsule.images?.length>0 && <div style={{marginTop:10}}>{capsule.images.map((s,i)=><img key={i} src={s} alt="" style={{width:"100%",borderRadius:8,marginTop:6,objectFit:"cover"}}/>)}</div>}
                 <div className="op-foot">
-                  <span>Dikirim via TimeCapsule ✦</span>
+                  <span>Dikirim via CapsuleMe ✦</span>
                   <div style={{display:"flex",gap:6}}><button className="share-b">🔗 Bagikan</button><button className="report-b" onClick={()=>setShowReport(true)}>🚩 Laporkan</button></div>
                 </div>
               </div>
@@ -869,7 +872,7 @@ function AboutPage({ onStart }) {
         <div style={{position:"relative",zIndex:1}}>
           <div className="hero-tag">✦ Platform Pesan Istimewa</div>
           <h1 className="hero-h1">Pesan yang Terbuka<br/>di <em>Momen yang Tepat</em></h1>
-          <p className="hero-p">TimeCapsule memungkinkan siapa saja mengirimkan ucapan yang terkunci waktu — untuk keluarga, sahabat, pasangan, atau karyawan. Dibuka saat momennya paling berarti.</p>
+          <p className="hero-p">CapsuleMe memungkinkan siapa saja mengirimkan ucapan yang terkunci waktu — untuk keluarga, sahabat, pasangan, atau karyawan. Dibuka saat momennya paling berarti.</p>
           <div className="hero-btns">
             <button className="btn-hp" onClick={onStart}>Mulai Gratis →</button>
           </div>
@@ -944,7 +947,7 @@ function AboutPage({ onStart }) {
           <span className="footer-link">Kebijakan Privasi</span>
           <span className="footer-link">Hubungi Kami</span>
         </div>
-        <div style={{marginTop:16,fontSize:10,color:"#3D3530"}}>© 2025 TimeCapsule · All rights reserved</div>
+        <div style={{marginTop:16,fontSize:10,color:"#3D3530"}}>© 2026 CapsuleMe · All rights reserved</div>
       </div>
     </div>
   );
@@ -981,7 +984,7 @@ function SenderApp({ accessCode }) {
     <>
       <style>{css}</style>
       <header className="hdr">
-        <div className="hdr-logo" onClick={()=>setTab("home")}>Time<span>Capsule</span></div>
+        <div className="hdr-logo" onClick={()=>setTab("home")} title="CapsuleMe"><img src="/capsuleme-logo.png" alt="CapsuleMe"/></div>
         <nav className="nav">
           <button className="nb" onClick={()=>setTab("home")}>← Buat Capsule</button>
         </nav>
@@ -994,7 +997,7 @@ function SenderApp({ accessCode }) {
     <>
       <style>{css}</style>
       <header className="hdr">
-        <div className="hdr-logo" onClick={()=>setTab("home")}>Time<span>Capsule</span></div>
+        <div className="hdr-logo" onClick={()=>setTab("home")} title="CapsuleMe"><img src="/capsuleme-logo.png" alt="CapsuleMe"/></div>
         <nav className="nav">
           <button className={`nb ${tab==="home"?"on":""}`} onClick={()=>setTab("home")}>🏠 Beranda</button>
           <button className={`nb ${tab==="create"?"on":""}`} onClick={()=>setTab("create")}>+ Buat</button>
@@ -1009,8 +1012,8 @@ function SenderApp({ accessCode }) {
           <div style={{background:"linear-gradient(135deg,#0F0E0C,#2C2010)",borderRadius:14,padding:"24px 20px",marginBottom:20,textAlign:"center",position:"relative",overflow:"hidden"}}>
             <div style={{position:"absolute",inset:0,background:"radial-gradient(ellipse at 50% 0%,rgba(201,168,76,.12),transparent 70%)"}}/>
             <div style={{position:"relative",zIndex:1}}>
-              <div style={{fontSize:32,marginBottom:10}}>📦</div>
-              <div style={{fontFamily:"'Cormorant Garamond',serif",fontSize:22,color:"#F7F4EF",marginBottom:7}}>Selamat datang di <em style={{color:"#C9A84C"}}>TimeCapsule</em></div>
+              <img className="brand-logo-full" src="/capsuleme-logo.png" alt="CapsuleMe - Simpan pesanmu untuk masa depan"/>
+              <div style={{fontFamily:"'Cormorant Garamond',serif",fontSize:22,color:"#F7F4EF",marginBottom:7}}>Selamat datang di <em style={{color:"#C9A84C"}}>CapsuleMe</em></div>
               <div style={{fontSize:12,color:"#9A9089",lineHeight:1.7,marginBottom:16,maxWidth:380,margin:"0 auto 16px"}}>Buat pesan yang terkunci waktu — untuk keluarga, sahabat, pasangan, atau karyawanmu.</div>
               <button className="btn-hp" onClick={()=>setTab("create")}>Buat Capsule Pertama →</button>
             </div>
@@ -1105,9 +1108,9 @@ function AdminLogin({ onLogin }) {
     <div className="admin-login-pg">
       <style>{css}</style>
       <div className="login-card">
-        <div className="login-ico">🔐</div>
+        <img className="login-brand-logo" src="/capsuleme-logo.png" alt="CapsuleMe"/>
         <div className="login-ttl">Admin Access</div>
-        <div className="login-sub">Halaman ini hanya untuk administrator TimeCapsule.</div>
+        <div className="login-sub">Halaman ini hanya untuk administrator CapsuleMe.</div>
         <input className="login-inp" type={showPass ? "text" : "password"} placeholder="Password admin" value={pass} onChange={e=>setPass(e.target.value)} onKeyDown={e=>e.key==="Enter"&&tryLogin()}/>
         <button type="button" className="login-show" onClick={()=>setShowPass(v=>!v)}>
           {showPass ? "Sembunyikan password" : "Tampilkan password"}
@@ -1130,7 +1133,7 @@ function AdminPanel({ onLogout }) {
     <>
       <style>{css}</style>
       <header className="adm-hdr">
-        <div className="adm-logo">🔧 TimeCapsule Admin</div>
+        <div className="adm-logo"><img src="/capsuleme-logo.png" alt="CapsuleMe"/><span>CapsuleMe Admin</span></div>
         <nav className="nav">
           <button className={`nb nb-adm ${tab==="dashboard"?"on":""}`} onClick={()=>setTab("dashboard")}>Dashboard</button>
           <button className={`nb nb-adm ${tab==="capsules"?"on":""}`} onClick={()=>setTab("capsules")}>Capsule</button>
@@ -1145,7 +1148,7 @@ function AdminPanel({ onLogout }) {
       {tab==="dashboard" && (
         <div className="wrap">
           <div className="pg-title" style={{color:"#F9FAFB",fontFamily:"'Cormorant Garamond',serif"}}>Dashboard Admin</div>
-          <div className="pg-sub" style={{color:"#6B7280"}}>Kelola seluruh platform TimeCapsule</div>
+          <div className="pg-sub" style={{color:"#6B7280"}}>Kelola seluruh platform CapsuleMe</div>
           <div className="stats">
             {[{n:capsules.length,l:"Total Capsule"},{n:capsules.filter(c=>!isReady(c.openAt)).length,l:"Terkunci"},{n:capsules.filter(c=>isReady(c.openAt)).length,l:"Siap Buka"},{n:reports.length,l:"Laporan",red:true}].map((s,i)=>(
               <div key={i} className="adm-stat"><div className="adm-stat-n" style={{color:s.red?"#EF4444":"#C9A84C"}}>{s.n}</div><div className="adm-stat-l">{s.l}</div></div>
@@ -1255,7 +1258,7 @@ function SenderAccessGate({ onLogin }) {
       sessionStorage.setItem("timecapsule_sender_access", code);
       onLogin(code);
     } else {
-      setErr("Kode akses salah. Hubungi admin untuk memakai TimeCapsule.");
+      setErr("Kode akses salah. Hubungi admin untuk memakai CapsuleMe.");
       setCode("");
     }
   }
@@ -1263,7 +1266,7 @@ function SenderAccessGate({ onLogin }) {
     <div className="admin-login-pg">
       <style>{css}</style>
       <div className="login-card">
-        <div className="login-ico">🔑</div>
+        <img className="login-brand-logo" src="/capsuleme-logo.png" alt="CapsuleMe"/>
         <div className="login-ttl">Akses Pengirim</div>
         <div className="login-sub">Masukkan kode akses untuk membuat dan mengirim capsule.</div>
         <input className="login-inp" type="password" placeholder="Kode akses" value={code} onChange={e=>setCode(e.target.value)} onKeyDown={e=>e.key==="Enter"&&tryLogin()}/>
