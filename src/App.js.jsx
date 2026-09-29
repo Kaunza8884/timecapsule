@@ -1,4 +1,5 @@
 import { useState, useEffect, useRef } from "react";
+import { supabase } from "./supabaseClient";
 
 const ADMIN_PASSWORD = "timecapsule2025";
 const SENDER_ACCESS_CODE = "sfc2025";
@@ -435,6 +436,9 @@ textarea{resize:vertical;min-height:90px;line-height:1.6;}
 .login-sub{font-size:11px;color:#6B7280;margin-bottom:20px;line-height:1.6;}
 .login-inp{width:100%;padding:10px 13px;border:1.5px solid #374151;border-radius:8px;background:#111827;color:#F9FAFB;font-size:13px;font-family:'Outfit',sans-serif;outline:none;margin-bottom:9px;transition:border-color .18s;}
 .login-inp:focus{border-color:#6B7280;background:#FFFFFF;color:#111827;}
+.link-daftar{color:#C9A84C;cursor:pointer;font-weight:600;text-decoration:underline;}
+.link-daftar:hover{color:#E3C66C;}
+.login-inp:disabled{opacity:.6;cursor:not-allowed;}
 .login-inp:-webkit-autofill,.login-inp:-webkit-autofill:hover,.login-inp:-webkit-autofill:focus{-webkit-text-fill-color:#111827 !important;-webkit-box-shadow:0 0 0 1000px #FFFFFF inset !important;caret-color:#111827;}
 .login-show{width:100%;padding:8px 10px;margin-bottom:12px;background:linear-gradient(180deg,#334155,#1E293B);color:#E5E7EB;border:1px solid #64748B;border-radius:8px;font-size:11px;font-weight:700;cursor:pointer;font-family:'Outfit',sans-serif;transition:transform .18s,box-shadow .18s,filter .18s;box-shadow:inset 0 1px 0 rgba(255,255,255,.28),0 3px 0 #0B1220,0 7px 12px rgba(0,0,0,.22);}
 .login-show:hover{filter:brightness(1.12);transform:translateY(-1px);}
@@ -967,6 +971,7 @@ function SenderApp({ accessCode }) {
   const [notifModal,setNotifModal]=useState(null);
   const [viewing,setViewing]=useState(null);
   const readyCount = capsules.filter(c=>isReady(c.openAt)).length;
+  const sender = JSON.parse(sessionStorage.getItem("capsuleme_sender") || "{}");
 
   useEffect(()=>{ localStorage.setItem("timecapsule_capsules", JSON.stringify(capsules)); },[capsules]);
   useEffect(()=>{ localStorage.setItem("timecapsule_sender_credits", String(credits)); },[credits]);
@@ -1022,7 +1027,15 @@ function SenderApp({ accessCode }) {
               <button className="btn-hp" onClick={()=>setTab("create")}>Buat Capsule Pertama →</button>
             </div>
           </div>
-
+        <div style={{background:"#1A1A18",borderRadius:14,padding:"16px 20px",marginBottom:20,border:"1px solid #2C2010"}}>
+  <div style={{display:"flex",justifyContent:"space-between",alignItems:"baseline",marginBottom:10}}>
+    <span style={{fontSize:12,color:"#9A9089"}}>Sisa token</span>
+    <span style={{fontSize:18,color:"#C9A84C",fontWeight:600}}>{sender.sisa ?? 0} <span style={{fontSize:12,color:"#9A9089",fontWeight:400}}>dari {sender.total ?? 0}</span></span>
+  </div>
+  <div style={{height:6,background:"#2C2010",borderRadius:3,overflow:"hidden"}}>
+    <div style={{height:"100%",width:`${sender.total ? (sender.used/sender.total)*100 : 0}%`,background:(sender.sisa ?? 0) > 0 ? "#C9A84C" : "#B4453C",borderRadius:3}}/>
+  </div>
+</div>
           <div className="stats">
             <div className="stat"><div className="stat-n">{capsules.length}</div><div className="stat-l">Total Capsule</div></div>
             <div className="stat"><div className="stat-n">{capsules.filter(c=>!isReady(c.openAt)).length}</div><div className="stat-l">Terkunci</div></div>
@@ -1255,18 +1268,39 @@ function ReceiverRoute({ slug }) {
 }
 
 function SenderAccessGate({ onLogin }) {
-  const [code,setCode]=useState("");
-  const [err,setErr]=useState("");
-  const [showCode,setShowCode]=useState(false);
-  function tryLogin() {
-    if (code === SENDER_ACCESS_CODE) {
-      sessionStorage.setItem("timecapsule_sender_access", code);
-      onLogin(code);
-    } else {
-      setErr("Kode akses salah. Hubungi admin untuk memakai CapsuleMe.");
-      setCode("");
+  const [code, setCode]             = useState("");
+  const [err, setErr]               = useState("");
+  const [showCode, setShowCode]     = useState(false);
+  const [loading, setLoading]       = useState(false);
+  const [showDaftar, setShowDaftar] = useState(false);
+
+  async function tryLogin() {
+    const kode = code.trim().toUpperCase();
+    if (!kode) { setErr("Masukkan kode akses terlebih dahulu."); return; }
+    setLoading(true);
+    setErr("");
+    try {
+      const { data, error } = await supabase.rpc("check_sender_code", { p_code: kode });
+      if (error) { setErr("Gagal terhubung ke server. Coba lagi."); setLoading(false); return; }
+      if (!data || !data.ok) {
+        setErr(data?.error || "Kode akses tidak ditemukan.");
+        setCode("");
+        setLoading(false);
+        return;
+      }
+
+      sessionStorage.setItem("timecapsule_sender_access", kode);
+      sessionStorage.setItem("capsuleme_sender", JSON.stringify(data));
+      onLogin(kode, data);
+    } catch {
+      setErr("Terjadi kesalahan. Periksa koneksi internet.");
+    } finally {
+      setLoading(false);
     }
   }
+
+  if (showDaftar) return <FormMintaAkses onBack={()=>setShowDaftar(false)}/>;
+
   return (
     <div className="admin-login-pg">
       <style>{css}</style>
@@ -1274,13 +1308,90 @@ function SenderAccessGate({ onLogin }) {
         <img className="login-brand-logo" src="/capsuleme-logo.png" alt="CapsuleMe"/>
         <div className="login-ttl">Akses Pengirim</div>
         <div className="login-sub">Masukkan kode akses untuk membuat dan mengirim capsule.</div>
-        <input className="login-inp" type={showCode ? "text" : "password"} placeholder="Kode akses" value={code} onChange={e=>setCode(e.target.value)} onKeyDown={e=>e.key==="Enter"&&tryLogin()}/>
-        <button type="button" className="login-show" aria-pressed={showCode} onClick={()=>setShowCode(v=>!v)}>
-          {showCode ? "🙈 Sembunyikan sandi" : "👁 Tampilkan sandi"}
+        <input className="login-inp" type={showCode ? "text" : "password"}
+          placeholder="Kode akses (contoh: CM-XXXXXX)" value={code}
+          onChange={e=>setCode(e.target.value)}
+          onKeyDown={e=>e.key==="Enter"&&tryLogin()} disabled={loading}/>
+        <button type="button" className="login-show" aria-pressed={showCode}
+          onClick={()=>setShowCode(v=>!v)}>
+          {showCode ? "🙈 Sembunyikan kode" : "👁 Tampilkan kode"}
         </button>
-        <button className="login-btn" onClick={tryLogin}>Masuk →</button>
+        <button className="login-btn" onClick={tryLogin} disabled={loading}>
+          {loading ? "Memeriksa…" : "Masuk →"}
+        </button>
         {err && <div className="login-err">🚫 {err}</div>}
-        <div className="login-hint">Akses ini dibatasi agar tidak semua orang bisa membuat capsule.</div>
+        <div className="login-hint">
+          Belum punya kode akses?{" "}
+          <span className="link-daftar" onClick={()=>setShowDaftar(true)}>Ajukan di sini</span>
+        </div>
+      </div>
+    </div>
+  );
+}
+
+function FormMintaAkses({ onBack }) {
+  const [form, setForm] = useState({ nama:"", email:"", whatsapp:"", company:"", tujuan:"personal", catatan:"" });
+  const [loading, setLoading] = useState(false);
+  const [sukses, setSukses]   = useState(false);
+  const [err, setErr]         = useState("");
+  const fc = e => setForm(f=>({...f,[e.target.name]:e.target.value}));
+  const bisaKirim = form.nama && form.email;
+
+  async function kirim() {
+    if (!bisaKirim) { setErr("Nama dan email wajib diisi."); return; }
+    setLoading(true); setErr("");
+    try {
+      const { error } = await supabase.from("senders").insert({
+        name: form.nama, email: form.email, whatsapp: form.whatsapp,
+        company: form.company || form.tujuan, catatan: form.catatan,
+        status: "pending", credits: 0
+      });
+      if (error) { setErr("Gagal mengirim pengajuan. Coba lagi."); setLoading(false); return; }
+      setSukses(true);
+    } catch {
+      setErr("Terjadi kesalahan. Periksa koneksi internet.");
+    } finally { setLoading(false); }
+  }
+
+  if (sukses) return (
+    <div className="admin-login-pg">
+      <style>{css}</style>
+      <div className="login-card">
+        <div style={{fontSize:46,marginBottom:14}}>✅</div>
+        <div className="login-ttl">Pengajuan Terkirim</div>
+        <div className="login-sub" style={{lineHeight:1.7}}>
+          Terima kasih, <strong>{form.nama}</strong>.<br/><br/>
+          Pengajuan Anda sedang kami tinjau. Kode akses akan dikirim ke <strong>{form.email}</strong> dalam 1×24 jam.
+        </div>
+        <button className="login-btn" onClick={onBack}>← Kembali ke Masuk</button>
+      </div>
+    </div>
+  );
+
+  return (
+    <div className="admin-login-pg">
+      <style>{css}</style>
+      <div className="login-card" style={{maxWidth:420}}>
+        <img className="login-brand-logo" src="/capsuleme-logo.png" alt="CapsuleMe"/>
+        <div className="login-ttl">Ajukan Akses</div>
+        <div className="login-sub">Isi data berikut. Kami kirim kode akses via email.</div>
+        <input className="login-inp" name="nama" placeholder="Nama lengkap *" value={form.nama} onChange={fc}/>
+        <input className="login-inp" name="email" placeholder="Alamat email *" value={form.email} onChange={fc} type="email"/>
+        <input className="login-inp" name="whatsapp" placeholder="Nomor WhatsApp" value={form.whatsapp} onChange={fc}/>
+        <input className="login-inp" name="company" placeholder="Nama perusahaan/instansi" value={form.company} onChange={fc}/>
+        <select className="login-inp" name="tujuan" value={form.tujuan} onChange={fc}>
+          <option value="personal">Untuk keperluan pribadi</option>
+          <option value="perusahaan">Untuk perusahaan / tim</option>
+        </select>
+        <textarea className="login-inp" name="catatan" placeholder="Ceritakan rencana penggunaan (opsional)"
+          value={form.catatan} onChange={fc} rows={3} style={{resize:"vertical",minHeight:70}}/>
+        <button className="login-btn" onClick={kirim} disabled={!bisaKirim||loading}>
+          {loading ? "Mengirim…" : "Kirim Pengajuan →"}
+        </button>
+        {err && <div className="login-err">🚫 {err}</div>}
+        <div className="login-hint">
+          Sudah punya kode? <span className="link-daftar" onClick={onBack}>Masuk di sini</span>
+        </div>
       </div>
     </div>
   );
