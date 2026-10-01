@@ -4,7 +4,7 @@ const json = (statusCode, body) => ({
   body: JSON.stringify(body),
 });
 
-const required = ["SUPABASE_URL", "SUPABASE_SERVICE_ROLE_KEY", "SENDER_ACCESS_CODE", "SITE_URL"];
+const required = ["SUPABASE_URL", "SUPABASE_SERVICE_ROLE_KEY", "SITE_URL"];
 
 exports.handler = async (event) => {
   if (event.httpMethod !== "POST") return json(405, { error: "Method not allowed" });
@@ -19,9 +19,8 @@ exports.handler = async (event) => {
     return json(400, { error: "Body JSON tidak valid" });
   }
 
-  if (payload.accessCode !== process.env.SENDER_ACCESS_CODE) {
-    return json(401, { error: "Kode akses pengirim salah" });
-  }
+  const accessCode = String(payload.accessCode || "").trim().toUpperCase();
+  if (!accessCode) return json(401, { error: "Kode akses pengirim wajib diisi" });
 
   const capsule = payload.capsule || {};
   const recipients = Array.isArray(payload.recipients) ? payload.recipients : [];
@@ -36,11 +35,28 @@ exports.handler = async (event) => {
     "Content-Type": "application/json",
   };
 
-  const senderRes = await fetch(`${supabaseUrl}/rest/v1/senders?access_code=eq.${encodeURIComponent(payload.accessCode)}&select=id,name,credits`, { headers });
-  const senders = await senderRes.json();
-  const sender = senders[0];
+  // Setiap pengirim punya kode akses sendiri. Pemeriksaannya memakai fungsi database
+  // yang sama dengan halaman login (status, masa berlaku, dan sisa token).
+  const checkRes = await fetch(`${supabaseUrl}/rest/v1/rpc/check_sender_code`, {
+    method: "POST",
+    headers,
+    body: JSON.stringify({ p_code: accessCode }),
+  });
+  if (!checkRes.ok) return json(500, { error: "Gagal memeriksa kode akses", detail: await checkRes.text() });
+  const check = await checkRes.json();
+  if (!check || !check.ok || !check.id) {
+    return json(401, { error: (check && check.error) || "Kode akses pengirim salah" });
+  }
+
+  // Token: credits = jumlah diberikan, credits_used = jumlah terpakai.
+  const senderRes = await fetch(`${supabaseUrl}/rest/v1/senders?id=eq.${encodeURIComponent(check.id)}&select=id,name,credits,credits_used`, { headers });
+  if (!senderRes.ok) return json(500, { error: "Gagal mengambil data pengirim", detail: await senderRes.text() });
+  const sender = (await senderRes.json())[0];
   if (!sender) return json(403, { error: "Pengirim tidak ditemukan" });
-  if (sender.credits < recipients.length) return json(402, { error: "Kredit tidak cukup", credits: sender.credits, needed: recipients.length });
+  const total = Number(sender.credits) || 0;
+  const used = Number(sender.credits_used) || 0;
+  const sisa = total - used;
+  if (sisa < recipients.length) return json(402, { error: "Token tidak cukup", credits: sisa, sisa, total, used, needed: recipients.length });
 
   // Logo/foto pengirim: hanya data URL gambar kecil yang diterima.
   const avatar =
@@ -93,10 +109,11 @@ exports.handler = async (event) => {
   const updateCredits = await fetch(`${supabaseUrl}/rest/v1/senders?id=eq.${sender.id}`, {
     method: "PATCH",
     headers,
-    body: JSON.stringify({ credits: sender.credits - recipients.length }),
+    body: JSON.stringify({ credits_used: used + recipients.length, last_used_at: new Date().toISOString() }),
   });
-  if (!updateCredits.ok) return json(500, { error: "Gagal mengurangi kredit", detail: await updateCredits.text() });
+  if (!updateCredits.ok) return json(500, { error: "Gagal mencatat pemakaian token", detail: await updateCredits.text() });
 
   const saved = await capsuleRes.json();
-  return json(200, { ok: true, credits: sender.credits - recipients.length, capsules: saved });
+  const newUsed = used + recipients.length;
+  return json(200, { ok: true, credits: total - newUsed, sisa: total - newUsed, total, used: newUsed, capsules: saved });
 };

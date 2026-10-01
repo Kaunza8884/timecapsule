@@ -1,8 +1,6 @@
 import { useState, useEffect, useRef } from "react";
 import { supabase } from "./supabaseClient";
 
-const ADMIN_PASSWORD = "timecapsule2025";
-const SENDER_ACCESS_CODE = "sfc2025";
 const DEFAULT_CREDITS = 100;
 
 const THEMES = [
@@ -1093,6 +1091,10 @@ function CreateForm({ setCapsules, onSuccess, credits, spendCredit, avatar, avat
           const data = await res.json();
           const saved = data.capsules?.[0];
           if (saved?.recipient_url) c.recipientUrl = saved.recipient_url;
+          if (typeof data.sisa === "number") {
+            const s = JSON.parse(sessionStorage.getItem("capsuleme_sender") || "{}");
+            sessionStorage.setItem("capsuleme_sender", JSON.stringify({ ...s, sisa:data.sisa, total:data.total, used:data.used }));
+          }
         } else if (res.status !== 501) {
           const data = await res.json().catch(()=>({error:"Gagal menyimpan ke backend"}));
           setSendErr(data.error || "Gagal menyimpan ke backend. Capsule tetap dibuat sebagai demo lokal.");
@@ -1625,7 +1627,26 @@ function SenderApp({ accessCode, onLogout }) {
 /* ═══════════════════ ADMIN ═══════════════════ */
 function AdminLogin({ onLogin }) {
   const [pass,setPass]=useState(""); const [err,setErr]=useState(""); const [showPass,setShowPass]=useState(false);
-  function tryLogin(){ if(pass===ADMIN_PASSWORD){ onLogin(); } else { setErr("Password salah. Akses ditolak."); setPass(""); } }
+  const [loading,setLoading]=useState(false);
+  // Sandi diperiksa di server (Netlify Function), tidak disimpan di kode aplikasi.
+  async function tryLogin(){
+    if (!pass || loading) return;
+    setLoading(true); setErr("");
+    try {
+      const res = await fetch("/.netlify/functions/admin-login", { method:"POST", headers:{"Content-Type":"application/json"}, body:JSON.stringify({ password:pass }) });
+      const isJson = (res.headers.get("content-type")||"").includes("application/json");
+      const data = isJson ? await res.json().catch(()=>({})) : {};
+      if (res.ok && data.ok) { onLogin(); return; }
+      if (res.status===401) setErr("Password salah. Akses ditolak.");
+      else if (res.status===501) setErr("Sandi admin belum diatur di server.");
+      else setErr("Server admin tidak tersedia. Login admin hanya berjalan di situs online.");
+      setPass("");
+    } catch {
+      setErr("Gagal terhubung ke server.");
+    } finally {
+      setLoading(false);
+    }
+  }
   return (
     <div className="admin-login-pg">
       <style>{css}</style>
@@ -1637,7 +1658,7 @@ function AdminLogin({ onLogin }) {
         <button type="button" className="login-show" onClick={()=>setShowPass(v=>!v)}>
           {showPass ? "Sembunyikan password" : "Tampilkan password"}
         </button>
-        <button className="login-btn" onClick={tryLogin}>Masuk →</button>
+        <button className="login-btn" onClick={tryLogin} disabled={loading}>{loading ? "Memeriksa…" : "Masuk →"}</button>
         {err && <div className="login-err">🚫 {err}</div>}
         <div className="login-hint">URL halaman ini bersifat rahasia.<br/>Jangan bagikan ke siapapun.</div>
       </div>
