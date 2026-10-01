@@ -35,6 +35,7 @@ exports.handler = async (event) => {
     theme: row.theme,
     openAt: row.open_at,
     images: [],
+    avatar: row.sender_avatar || "",
     recipientType: row.company ? "company" : "personal",
     recipientUrl: row.recipient_url,
   });

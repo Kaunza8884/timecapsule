@@ -125,11 +125,33 @@ const recipientPath = c => `/untuk/${slugOf(c)}`;
 const recipientLink = c => c.recipientUrl || `${window.location.origin}${recipientPath(c)}`;
 function readCapsules(){ try { return JSON.parse(localStorage.getItem("timecapsule_capsules")) || DEMO_CAPSULES; } catch { return DEMO_CAPSULES; } }
 function findCapsuleBySlug(slug){ return readCapsules().find(c=>slugOf(c)===slug) || null; }
+// Hanya data URL gambar yang boleh dipakai sebagai logo/foto pengirim.
+const safeAvatar = a => (typeof a==="string" && /^data:image\/(png|jpeg|webp);base64,/.test(a)) ? a : "";
+// Kecilkan logo/foto pengirim jadi persegi 192px. Gambar yang jelas tidak persegi (logo lebar/tinggi) ditampilkan utuh, sisanya dipotong tengah.
+function makeAvatar(file){
+  return new Promise((resolve,reject)=>{
+    const r=new FileReader(); r.onerror=reject;
+    r.onload=()=>{
+      const img=new Image(); img.onerror=reject;
+      img.onload=()=>{
+        const S=192, cv=document.createElement("canvas"); cv.width=cv.height=S;
+        const ctx=cv.getContext("2d"); ctx.fillStyle="#fff"; ctx.fillRect(0,0,S,S);
+        const ar=img.width/img.height, contain=ar>1.3||ar<0.77;
+        const sc=contain ? Math.min(S/img.width,S/img.height)*0.86 : Math.max(S/img.width,S/img.height);
+        const w=img.width*sc, h=img.height*sc;
+        ctx.drawImage(img,(S-w)/2,(S-h)/2,w,h);
+        resolve(cv.toDataURL("image/jpeg",0.86));
+      };
+      img.src=r.result;
+    };
+    r.readAsDataURL(file);
+  });
+}
 function validateFile(f){ if(!ALLOWED_IMG.includes(f.type)) return "Format tidak didukung. Hanya JPG, PNG, GIF, WEBP."; if(f.size>MAX_FILE_SIZE) return "Ukuran maks 5MB."; const ext=f.name.split(".").pop().toLowerCase(); if(["mp4","mov","avi","mkv","webm","flv"].includes(ext)) return "Upload video tidak diizinkan."; return null; }
 
 /* ═══════════ CSS ═══════════ */
 const css = `
-@import url('https://fonts.googleapis.com/css2?family=Cormorant+Garamond:ital,wght@0,400;0,600;0,700;1,400;1,600&family=Outfit:wght@300;400;500;600;700&display=swap');
+@import url('https://fonts.googleapis.com/css2?family=Cormorant+Garamond:ital,wght@0,400;0,600;0,700;1,400;1,600&family=Outfit:wght@300;400;500;600;700&family=Great+Vibes&family=Playfair+Display:wght@400;500&display=swap');
 *,*::before,*::after{box-sizing:border-box;margin:0;padding:0;}
 html{scroll-behavior:smooth;}
 body{font-family:'Outfit',sans-serif;background:#F7F4EF;color:#0F0E0C;min-height:100vh;}
@@ -146,8 +168,8 @@ body{font-family:'Outfit',sans-serif;background:#F7F4EF;color:#0F0E0C;min-height
 
 /* HEADER */
 .hdr{height:56px;display:flex;align-items:center;justify-content:space-between;padding:0 24px;position:sticky;top:0;z-index:99;background:#0F0E0C;border-bottom:2px solid #C9A84C;}
-.hdr-logo{width:142px;height:42px;background:#fff;border-radius:6px;overflow:hidden;cursor:pointer;flex-shrink:0;position:relative;}
-.hdr-logo img{position:absolute;width:142px;height:142px;left:0;top:-84px;object-fit:cover;}
+.hdr-logo{width:44px;height:44px;background:#fff;border-radius:8px;overflow:hidden;cursor:pointer;flex-shrink:0;position:relative;}
+.hdr-logo img{position:absolute;width:82px;height:82px;left:-19px;top:-8px;object-fit:cover;}
 .brand-logo-full{display:block;width:min(210px,72vw);height:auto;margin:0 auto 16px;border-radius:8px;}
 .login-brand-logo{display:block;width:150px;height:auto;margin:0 auto 14px;border-radius:8px;}
 .nav{display:flex;gap:3px;flex-wrap:wrap;}
@@ -198,6 +220,9 @@ textarea{resize:vertical;min-height:90px;line-height:1.6;}
 .topt.on{border-color:#C9A84C;background:#FBF3E0;}
 .topt-e{font-size:17px;margin-bottom:2px;}
 .topt-l{font-size:9px;font-weight:500;}
+.topt-ph{display:block;width:100%;height:44px;object-fit:cover;border-radius:6px;margin-bottom:4px;}
+.cico{overflow:hidden;}
+.cico img{width:100%;height:100%;object-fit:cover;display:block;}
 
 /* MSG TABS */
 .msg-tabs{display:flex;gap:5px;margin-bottom:11px;flex-wrap:wrap;}
@@ -447,6 +472,282 @@ textarea{resize:vertical;min-height:90px;line-height:1.6;}
 .login-btn:active,.login-show:active{transform:translateY(3px);box-shadow:inset 0 1px 0 rgba(255,255,255,.25),0 1px 0 #172033,0 4px 8px rgba(0,0,0,.25);}
 .login-err{background:#450a0a;border:1px solid #991b1b;color:#fca5a5;font-size:11px;padding:8px 12px;border-radius:7px;margin-top:9px;animation:fadeIn .25s ease;}
 .login-hint{margin-top:14px;font-size:10px;color:#4B5563;line-height:1.6;}
+
+/* LOGIN PENGIRIM (Elegant & Premium) */
+/* Foto latar: taruh gambar di public/ lalu ganti none menjadi url('/login-bg.jpg') */
+.sender-gate{--gate-photo:none;--cm-bg:#080D14;--cm-navy:#0B1420;--cm-gold:#D9A441;--cm-gold-light:#F5CD72;--cm-gold-soft:#E9B956;--cm-cream:#FFF7E7;--cm-text:#F7F2E8;--cm-muted:#B8B5B0;--cm-border-gold:rgba(225,171,70,.85);position:relative;overflow:hidden;padding:40px 16px;background:var(--cm-bg);}
+.gate-bg{position:absolute;inset:0;z-index:0;pointer-events:none;background:radial-gradient(ellipse 60% 55% at 50% 50%,rgba(8,13,20,.75),transparent 70%),radial-gradient(ellipse at 50% 50%,transparent 45%,rgba(3,5,9,.85) 100%),var(--gate-photo) center/cover no-repeat,radial-gradient(circle at 6% 28%,rgba(245,190,95,.42),transparent 20%),radial-gradient(ellipse at 18% 62%,rgba(217,164,65,.22),transparent 36%),radial-gradient(ellipse at 22% 95%,rgba(140,90,35,.35),transparent 40%),radial-gradient(ellipse at 84% 72%,rgba(233,185,86,.24),transparent 34%),radial-gradient(circle at 97% 45%,rgba(245,205,114,.2),transparent 18%),radial-gradient(ellipse at 45% -10%,rgba(245,205,114,.2),transparent 42%),linear-gradient(160deg,#1A130B 0%,#0B1420 48%,#080D14 70%,#17110A 100%);}
+.gate-bokeh{position:absolute;inset:0;z-index:0;pointer-events:none;filter:blur(3px);opacity:.9;background:radial-gradient(circle at 70% 24%,rgba(255,214,140,.45) 0 6px,transparent 9px),radial-gradient(circle at 76% 14%,rgba(255,214,140,.3) 0 14px,transparent 18px),radial-gradient(circle at 93% 30%,rgba(255,214,140,.38) 0 11px,transparent 15px),radial-gradient(circle at 88% 58%,rgba(255,214,140,.3) 0 8px,transparent 11px),radial-gradient(circle at 97% 88%,rgba(255,214,140,.45) 0 18px,transparent 23px),radial-gradient(circle at 72% 92%,rgba(255,214,140,.35) 0 9px,transparent 12px),radial-gradient(circle at 18% 6%,rgba(255,214,140,.3) 0 7px,transparent 10px),radial-gradient(circle at 4% 52%,rgba(255,214,140,.35) 0 10px,transparent 14px),radial-gradient(circle at 30% 97%,rgba(255,214,140,.4) 0 8px,transparent 11px);}
+.gate-clock{position:absolute;left:-6%;top:6%;width:min(44vw,640px);height:auto;z-index:0;pointer-events:none;opacity:.5;}
+.gate-quote{position:absolute;right:4%;top:11%;z-index:0;pointer-events:none;font-family:'Great Vibes',cursive;font-size:40px;line-height:1.3;color:var(--cm-gold-soft);transform:rotate(-12deg);text-shadow:0 2px 14px rgba(0,0,0,.6);}
+.gate-quote svg{display:block;margin:4px 0 0 110px;}
+.sender-gate .login-card{position:relative;z-index:1;max-width:580px;padding:48px 52px 40px;border-radius:24px;background:linear-gradient(145deg,rgba(29,22,15,.90),rgba(5,12,19,.95));border:1px solid rgba(229,177,75,.85);box-shadow:0 28px 70px rgba(0,0,0,.48),0 0 40px rgba(211,155,51,.08);backdrop-filter:blur(14px);-webkit-backdrop-filter:blur(14px);animation:gateIn .35s ease-out both;}
+@keyframes gateIn{from{opacity:0;transform:translateY(12px);}to{opacity:1;transform:none;}}
+.gate-logo{width:250px;height:222px;margin:0 auto 30px;background:#FFFDF8;border-radius:16px;overflow:hidden;display:flex;align-items:center;justify-content:center;box-shadow:0 12px 30px rgba(0,0,0,.35);}
+.gate-logo img{width:306px;height:306px;flex-shrink:0;}
+.sender-gate .login-ttl{font-family:'Playfair Display','Cormorant Garamond',Georgia,serif;font-size:52px;font-weight:500;color:var(--cm-text);margin-bottom:12px;line-height:1.1;}
+.sender-gate .login-ttl em{color:var(--cm-gold-soft);font-style:normal;}
+.sender-gate .login-sub{font-size:17px;color:var(--cm-muted);margin-bottom:30px;line-height:1.55;}
+.gate-inp-wrap{position:relative;}
+.gate-inp-ico{position:absolute;left:22px;top:50%;transform:translateY(-50%);color:var(--cm-text);pointer-events:none;display:flex;}
+.sender-gate .login-inp{padding:16px 20px;border-radius:15px;background:rgba(5,10,16,.72);border:1px solid rgba(225,171,70,.55);color:var(--cm-text);font-size:16px;margin-bottom:16px;outline:none;transition:border-color .18s,box-shadow .18s;}
+.sender-gate .gate-inp-wrap .login-inp{height:70px;padding-left:58px;font-size:18px;}
+.sender-gate .login-inp::placeholder{color:var(--cm-muted);}
+.sender-gate .login-inp:focus,.sender-gate .login-inp:focus-visible{outline:none;border-color:var(--cm-gold-light);background:rgba(5,10,16,.85);color:var(--cm-text);box-shadow:0 0 0 3px rgba(245,205,114,.14);}
+.sender-gate .login-inp option{background:var(--cm-navy);color:var(--cm-text);}
+.sender-gate .login-inp:-webkit-autofill,.sender-gate .login-inp:-webkit-autofill:hover,.sender-gate .login-inp:-webkit-autofill:focus{-webkit-text-fill-color:#F7F2E8 !important;-webkit-box-shadow:0 0 0 1000px #0A1119 inset !important;caret-color:#F7F2E8;}
+.sender-gate .login-show{height:60px;padding:0 16px;margin-bottom:18px;border-radius:14px;background:rgba(8,13,20,.8);border:1px solid rgba(225,171,70,.5);color:var(--cm-text);font-size:18px;font-weight:600;box-shadow:none;transition:background .18s,border-color .18s;}
+.sender-gate .login-show:hover{filter:none;transform:none;background:rgba(20,26,34,.9);border-color:rgba(225,171,70,.75);}
+.sender-gate .login-show:active{transform:none;box-shadow:none;}
+.sender-gate .login-btn{min-height:72px;padding:14px;border-radius:15px;background:linear-gradient(180deg,#F8D67E 0%,#E7AE45 100%);border:none;color:#111820;font-size:22px;font-weight:700;text-shadow:none;box-shadow:0 10px 28px rgba(217,164,65,.28);transition:transform .18s,box-shadow .18s;}
+.sender-gate .login-btn:hover{filter:none;transform:translateY(-1px);box-shadow:0 14px 34px rgba(217,164,65,.38);}
+.sender-gate .login-btn:active{transform:translateY(0);box-shadow:0 8px 22px rgba(217,164,65,.28);}
+.sender-gate .login-btn:disabled{opacity:.6;cursor:not-allowed;transform:none;}
+.sender-gate .login-hint{margin-top:26px;font-size:17px;color:var(--cm-muted);}
+.sender-gate .link-daftar{color:var(--cm-gold-soft);text-decoration-thickness:1px;text-underline-offset:4px;}
+.sender-gate .link-daftar:hover{color:var(--cm-gold-light);}
+@media(max-width:1180px){.gate-quote{display:none;}.gate-clock{opacity:.3;}}
+@media(max-width:768px){.sender-gate{padding:24px 16px;}.sender-gate .login-card{width:100%;max-width:none;padding:28px 24px 26px;}.sender-gate .login-ttl{font-size:36px;}.sender-gate .login-sub{font-size:15px;margin-bottom:24px;}.gate-logo{width:196px;height:174px;margin-bottom:22px;}.gate-logo img{width:240px;height:240px;}.sender-gate .gate-inp-wrap .login-inp{height:58px;font-size:14px;padding-left:48px;padding-right:12px;}.gate-inp-ico{left:18px;}.sender-gate .login-show{height:52px;font-size:16px;}.sender-gate .login-btn{min-height:58px;font-size:19px;}.sender-gate .login-hint{font-size:15px;}.gate-clock{display:none;}.gate-bokeh{opacity:.5;}}
+@media(prefers-reduced-motion:reduce){.sender-gate .login-card{animation:none;}.sender-gate .login-btn,.sender-gate .login-btn:hover{transition:none;transform:none;}}
+/* DASHBOARD PENGIRIM (Premium) */
+.dhdr{--cm-gold:#D7A33C;--cm-gold-2:#F1C761;position:sticky;top:0;z-index:99;height:76px;display:flex;align-items:center;gap:20px;padding:0 max(24px,calc((100% - 1440px)/2 + 56px));background:linear-gradient(180deg,#0E0B07,#080807);border-bottom:1px solid rgba(215,163,60,.55);box-shadow:0 1px 0 rgba(241,199,97,.08),0 8px 24px rgba(0,0,0,.18);}
+.d-brand{display:flex;align-items:center;gap:12px;cursor:pointer;flex-shrink:0;background:none;border:none;padding:0;}
+.d-brand .hdr-logo{width:46px;height:46px;border-radius:10px;}
+.d-brand-t{font-family:'Playfair Display','Cormorant Garamond',serif;font-size:24px;font-weight:500;color:#FFF9EF;}
+.d-brand-t em{color:var(--cm-gold-2);font-style:normal;}
+.d-nav{flex:1;display:flex;justify-content:center;gap:6px;}
+.d-nb{height:44px;padding:0 18px;border-radius:12px;border:1px solid transparent;background:transparent;color:rgba(255,249,239,.72);font-family:'Outfit',sans-serif;font-size:14px;font-weight:500;cursor:pointer;display:flex;align-items:center;gap:8px;transition:color .18s,background .18s,border-color .18s;white-space:nowrap;}
+.d-nb:hover{color:#FFF9EF;background:rgba(255,255,255,.04);}
+.d-nb.on{color:var(--cm-gold-2);background:rgba(215,163,60,.1);border-color:rgba(215,163,60,.45);box-shadow:0 0 18px rgba(215,163,60,.12);}
+.d-right{display:flex;align-items:center;gap:14px;flex-shrink:0;}
+.d-credit{height:40px;padding:0 16px;border-radius:20px;display:flex;align-items:center;gap:8px;background:linear-gradient(180deg,#F8D67E,#D7A33C);color:#17130E;font-size:13px;font-weight:700;border:none;}
+.d-credit b{font-size:15px;}
+.d-ico-btn{position:relative;width:44px;height:44px;border-radius:50%;border:1px solid rgba(255,249,239,.14);background:rgba(255,255,255,.03);color:#FFF9EF;display:flex;align-items:center;justify-content:center;cursor:pointer;transition:border-color .18s;}
+.d-ico-btn:hover{border-color:rgba(215,163,60,.6);}
+.d-badge{position:absolute;top:4px;right:4px;min-width:17px;height:17px;padding:0 4px;border-radius:9px;background:#E85050;color:#fff;font-size:10px;font-weight:700;display:flex;align-items:center;justify-content:center;border:2px solid #0E0B07;}
+.d-prof-wrap{position:relative;}
+.d-prof{display:flex;align-items:center;gap:10px;height:48px;padding:0 6px 0 4px;border-radius:26px;background:none;border:none;cursor:pointer;color:#FFF9EF;font-family:'Outfit',sans-serif;text-align:left;}
+.d-av{overflow:hidden;width:40px;height:40px;border-radius:50%;background:linear-gradient(135deg,#F1C761,#A87922);color:#17130E;font-weight:700;font-size:14px;display:flex;align-items:center;justify-content:center;flex-shrink:0;}
+.d-prof-n{display:block;font-size:14px;font-weight:600;line-height:1.2;max-width:150px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;}
+.d-prof-s{display:block;font-size:11px;color:rgba(255,249,239,.55);max-width:150px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;}
+.d-menu-ov{position:fixed;inset:0;z-index:98;}
+.d-menu{position:absolute;right:0;top:calc(100% + 10px);z-index:100;min-width:200px;background:#FFFFFF;border:1px solid rgba(173,126,40,.18);border-radius:14px;padding:8px;box-shadow:0 18px 40px rgba(39,28,12,.18);}
+.d-menu button{width:100%;height:44px;padding:0 12px;border:none;background:none;border-radius:10px;text-align:left;font-family:'Outfit',sans-serif;font-size:14px;color:#17130E;cursor:pointer;display:flex;align-items:center;gap:10px;}
+.d-menu button:hover{background:#FBF3E2;}
+.d-menu .d-menu-out{color:#C0392B;}
+.d-menu-err{padding:6px 12px;font-size:12px;color:#C0392B;}
+.av-pick{display:flex;align-items:center;gap:14px;flex-wrap:wrap;padding:12px 14px;margin-bottom:14px;border:1px dashed rgba(173,126,40,.4);border-radius:12px;background:#FDF9EF;}
+.av-pick-ph{width:56px;height:56px;border-radius:50%;overflow:hidden;flex-shrink:0;background:linear-gradient(135deg,#F1C761,#A87922);color:#17130E;font-weight:700;font-size:17px;display:flex;align-items:center;justify-content:center;border:1.5px solid #D7A33C;}
+.av-pick-t{flex:1;min-width:160px;font-size:12px;color:#6B6560;line-height:1.5;}
+.av-pick-t strong{display:block;font-size:13px;color:#0F0E0C;}
+.av-pick-b{display:flex;gap:8px;flex-wrap:wrap;}
+.av-pick-b button{min-height:40px;padding:0 14px;border-radius:9px;font-family:'Outfit',sans-serif;font-size:12px;font-weight:600;cursor:pointer;}
+.av-btn{background:#17130E;color:#F1C761;border:none;}
+.av-btn-x{background:#fff;color:#C0392B;border:1px solid #F3C4C0;}
+.av-err{flex-basis:100%;font-size:12px;color:#C0392B;}
+
+.dash{--cm-gold:#D7A33C;--cm-gold-2:#F1C761;--cm-gold-light:#FFE5A0;--cm-cream:#FFF9EF;--cm-text:#17130E;--cm-muted:#766E65;--cm-green:#1FA86A;--cm-border:rgba(173,126,40,.18);--cm-shadow:0 10px 30px rgba(39,28,12,.07),0 2px 8px rgba(39,28,12,.04);min-height:calc(100vh - 76px);background:radial-gradient(circle at 50% 0%,rgba(223,174,75,.08),transparent 32%),#FBF8F2;color:var(--cm-text);}
+.dash-in{max-width:1440px;margin:0 auto;padding:28px 56px 64px;}
+.dhero{position:relative;min-height:360px;border-radius:26px;overflow:hidden;border:1px solid rgba(215,163,60,.5);box-shadow:0 22px 50px rgba(39,28,12,.22),0 0 30px rgba(215,163,60,.08);background-color:#0C0905;background-image:linear-gradient(90deg,rgba(10,7,3,1) 0%,rgba(10,7,3,.98) 30%,rgba(10,7,3,.7) 42%,rgba(10,7,3,.15) 62%,rgba(10,7,3,.12) 100%),url('/assets/capsuleme-premium-hero.jpg');background-size:cover,auto 100%;background-position:center,right center;background-repeat:no-repeat;display:flex;align-items:center;margin-bottom:22px;}
+.dhero-copy{position:relative;z-index:1;padding:44px 56px;max-width:620px;}
+.dhero-eye{font-size:13px;letter-spacing:4px;text-transform:uppercase;color:rgba(255,249,239,.85);margin-bottom:12px;}
+.dhero-name{font-family:'Playfair Display','Cormorant Garamond',Georgia,serif;font-size:58px;font-weight:500;line-height:1.08;margin-bottom:16px;background:linear-gradient(180deg,#FFE5A0 0%,#E4B356 55%,#C58E2C 100%);-webkit-background-clip:text;background-clip:text;color:transparent;overflow-wrap:anywhere;}
+.dhero-p{font-size:18px;line-height:1.5;color:#FFF9EF;margin-bottom:26px;}
+.dhero-btns{display:flex;gap:18px;flex-wrap:wrap;margin-bottom:26px;}
+.d-cta{height:58px;padding:0 26px 0 14px;border-radius:14px;display:inline-flex;align-items:center;gap:12px;font-family:'Outfit',sans-serif;font-size:16px;font-weight:700;cursor:pointer;transition:transform .18s,box-shadow .18s;}
+.d-cta:hover{transform:translateY(-1px);}
+.d-cta:active{transform:translateY(0);}
+.d-cta-p{background:linear-gradient(180deg,#F8D67E 0%,#E3AE4A 55%,#C9922F 100%);color:#17130E;border:1px solid rgba(255,229,160,.7);box-shadow:inset 0 1px 0 rgba(255,255,255,.55),0 10px 24px rgba(215,163,60,.25);}
+.d-cta-p:hover{box-shadow:inset 0 1px 0 rgba(255,255,255,.6),0 14px 30px rgba(215,163,60,.35);}
+.d-cta-plus{width:32px;height:32px;border-radius:50%;background:#17130E;color:#F1C761;display:flex;align-items:center;justify-content:center;}
+.d-cta-s{background:#FFF9EF;color:#17130E;border:1px solid #FFF9EF;padding:0 30px;box-shadow:0 8px 20px rgba(0,0,0,.18);}
+.d-cta-s:hover{box-shadow:0 12px 26px rgba(0,0,0,.24);}
+.dhero-q{font-family:'Cormorant Garamond',serif;font-style:italic;font-size:22px;line-height:1.4;color:rgba(255,249,239,.82);}
+.dhero-q::after{content:"";display:block;width:96px;height:1px;margin-top:14px;background:linear-gradient(90deg,#D7A33C,transparent);}
+
+.dstats{display:grid;grid-template-columns:repeat(4,minmax(0,1fr));gap:18px;margin-bottom:22px;}
+.dstat{display:flex;align-items:center;gap:16px;padding:22px 20px;background:#fff;border:1px solid var(--cm-border);border-radius:18px;box-shadow:var(--cm-shadow);cursor:pointer;text-align:left;font-family:'Outfit',sans-serif;transition:transform .18s,box-shadow .18s;}
+.dstat:hover{transform:translateY(-1px);box-shadow:0 14px 34px rgba(39,28,12,.1);}
+.d-icirc{width:54px;height:54px;border-radius:50%;background:linear-gradient(135deg,#FBEFD2,#F4DFAE);color:#9A6B18;display:flex;align-items:center;justify-content:center;flex-shrink:0;}
+.dstat-n{display:block;font-family:'Playfair Display',serif;font-size:34px;font-weight:500;color:#B8862B;line-height:1;}
+.dstat-l{display:block;font-size:14px;color:var(--cm-muted);margin-top:4px;}
+.d-chev{margin-left:auto;color:#B7AA98;flex-shrink:0;}
+
+.dgrid{display:grid;grid-template-columns:minmax(0,2fr) minmax(320px,1fr);gap:18px;align-items:start;}
+.dcol{display:flex;flex-direction:column;gap:18px;min-width:0;}
+.dcard{background:#fff;border:1px solid var(--cm-border);border-radius:18px;box-shadow:var(--cm-shadow);padding:24px;}
+.dcard-h{display:flex;align-items:flex-start;justify-content:space-between;gap:12px;margin-bottom:16px;}
+.dcard-t{font-family:'Playfair Display',serif;font-size:24px;font-weight:500;color:var(--cm-text);}
+.dcard-s{font-size:13px;color:var(--cm-muted);margin-top:4px;}
+.d-link{background:none;border:none;color:#B8862B;font-family:'Outfit',sans-serif;font-size:14px;font-weight:600;cursor:pointer;white-space:nowrap;padding:8px 0;min-height:44px;}
+.d-link:hover{color:#8A6214;}
+
+.dtoken{background:radial-gradient(ellipse at 100% 0%,rgba(241,199,97,.18),transparent 55%),linear-gradient(135deg,#1B140A,#0B0907);border:1px solid rgba(215,163,60,.45);border-radius:18px;padding:22px 24px;color:#FFF9EF;box-shadow:var(--cm-shadow);}
+.dtoken-top{display:flex;align-items:center;gap:16px;margin-bottom:16px;}
+.dtoken-coin{width:50px;height:50px;border-radius:50%;background:linear-gradient(135deg,#FFE5A0,#C9922F);color:#3B2708;display:flex;align-items:center;justify-content:center;flex-shrink:0;box-shadow:0 0 18px rgba(241,199,97,.28);}
+.dtoken-l{font-size:16px;font-weight:600;}
+.dtoken-h{font-size:12px;color:rgba(255,249,239,.6);margin-top:2px;}
+.dtoken-v{margin-left:auto;text-align:right;font-family:'Playfair Display',serif;font-size:32px;color:#F1C761;line-height:1;white-space:nowrap;}
+.dtoken-v span{font-family:'Outfit',sans-serif;font-size:14px;color:rgba(255,249,239,.6);}
+.dtoken-bar{height:8px;border-radius:4px;background:#2E2211;overflow:hidden;}
+.dtoken-fill{height:100%;border-radius:4px;background:linear-gradient(90deg,#C9922F,#F1C761,#FFE5A0);box-shadow:0 0 12px rgba(241,199,97,.5);transition:width .4s;}
+.dtoken-fill.empty{background:#E85050;box-shadow:none;}
+
+.drows{display:flex;flex-direction:column;gap:12px;}
+.drow{display:flex;align-items:center;gap:16px;min-height:86px;padding:14px 18px;background:#fff;border:1px solid var(--cm-border);border-radius:15px;box-shadow:0 2px 10px rgba(39,28,12,.04);cursor:pointer;transition:border-color .18s,box-shadow .18s;}
+.drow:hover{border-color:rgba(215,163,60,.45);box-shadow:0 8px 20px rgba(39,28,12,.07);}
+.drow-th{width:54px;height:54px;border-radius:50%;display:flex;align-items:center;justify-content:center;font-size:24px;flex-shrink:0;border:2px solid #F4DFAE;overflow:hidden;}
+.drow-th img{width:100%;height:100%;object-fit:cover;display:block;}
+.drow-inf{flex:1;min-width:0;}
+.drow-cat{font-size:11px;letter-spacing:1px;text-transform:uppercase;color:var(--cm-muted);}
+.drow-name{font-family:'Playfair Display',serif;font-size:18px;color:var(--cm-text);margin:2px 0;}
+.drow-prev{font-size:13px;color:var(--cm-muted);white-space:nowrap;overflow:hidden;text-overflow:ellipsis;}
+.drow-meta{display:flex;align-items:center;gap:16px;flex-shrink:0;}
+.d-status{display:inline-flex;align-items:center;gap:6px;height:28px;padding:0 12px;border-radius:14px;font-size:12px;font-weight:600;white-space:nowrap;}
+.d-status.ready{background:#E3F6EC;color:#1FA86A;}
+.d-status.wait{background:#FBF1DC;color:#9A6B18;}
+.drow-date{font-size:13px;color:var(--cm-muted);white-space:nowrap;min-width:120px;text-align:right;}
+.d-kelola{height:44px;padding:0 16px;border-radius:12px;background:#17130E;color:#F1C761;border:none;font-family:'Outfit',sans-serif;font-size:13px;font-weight:600;cursor:pointer;display:flex;align-items:center;gap:8px;white-space:nowrap;}
+.d-kelola:hover{background:#2A2115;}
+.d-empty{text-align:center;padding:28px 12px;color:var(--cm-muted);font-size:14px;}
+
+.dqa{display:grid;grid-template-columns:1fr 1fr;gap:12px;}
+.dqa-i{position:relative;display:flex;flex-direction:column;align-items:flex-start;gap:10px;min-height:118px;padding:16px;border:1px solid var(--cm-border);border-radius:14px;background:#fff;cursor:pointer;text-align:left;font-family:'Outfit',sans-serif;transition:background .18s,border-color .18s;}
+.dqa-i:hover{background:#FDF6E8;border-color:rgba(215,163,60,.45);}
+.dqa-i .d-icirc{width:42px;height:42px;}
+.dqa-t{display:block;font-size:14px;font-weight:600;color:var(--cm-text);line-height:1.25;}
+.dqa-h{display:block;font-size:12px;color:var(--cm-muted);margin-top:2px;line-height:1.3;}
+.dqa-i .d-chev{position:absolute;top:16px;right:14px;margin:0;}
+
+.dthemes{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:12px;}
+.dtheme{border:1px solid var(--cm-border);border-radius:14px;overflow:hidden;background:#fff;cursor:pointer;text-align:left;padding:0;font-family:'Outfit',sans-serif;transition:border-color .18s,transform .18s;}
+.dtheme:hover{border-color:rgba(215,163,60,.5);transform:translateY(-1px);}
+.dtheme-img{height:96px;display:flex;align-items:center;justify-content:center;font-size:34px;overflow:hidden;}
+.dtheme-img img{width:100%;height:100%;object-fit:cover;display:block;transition:transform .3s;}
+.dtheme:hover .dtheme-img img{transform:scale(1.04);}
+.dtheme-b{display:block;padding:10px 12px;}
+.dtheme-n{display:block;font-size:14px;font-weight:600;color:var(--cm-text);}
+.dtheme-c{display:block;font-size:12px;color:var(--cm-muted);margin-top:2px;}
+
+@media(max-width:1200px){.dhdr .d-prof-txt{display:none;}.d-nb{padding:0 12px;}}
+@media(max-width:1100px){.dgrid{grid-template-columns:minmax(0,1fr);}.dthemes{grid-template-columns:repeat(4,minmax(0,1fr));}.dash-in{padding:24px 24px 56px;}.dhero-copy{padding:40px;}}
+@media(max-width:900px){
+.dhdr{height:auto;flex-wrap:wrap;gap:8px 12px;padding:10px 16px 0;}
+.d-nav{order:3;flex-basis:100%;justify-content:flex-start;overflow-x:auto;padding-bottom:8px;scrollbar-width:none;}
+.d-nav::-webkit-scrollbar{display:none;}
+.d-right{margin-left:auto;gap:8px;}
+.dstats{grid-template-columns:repeat(2,minmax(0,1fr));}
+.dhero{background-size:cover,cover;background-position:center,62% center;background-image:linear-gradient(90deg,rgba(10,7,3,.95) 0%,rgba(10,7,3,.82) 55%,rgba(10,7,3,.55) 100%),url('/assets/capsuleme-premium-hero.jpg');}
+.dash{min-height:auto;}
+}
+@media(max-width:640px){
+.dash-in{padding:16px 16px 48px;}
+.d-brand-t{font-size:20px;}
+.d-brand .hdr-logo{width:40px;height:40px;}
+.d-credit{height:36px;padding:0 12px;font-size:12px;}
+.d-credit .d-credit-l{display:none;}.dhdr{gap:8px;}.d-brand{gap:8px;}.d-right{gap:6px;}.d-prof{padding:0;gap:0;}.d-prof>svg{display:none;}.d-ico-btn{width:44px;height:44px;}
+.dhero{min-height:0;border-radius:20px;}
+.dhero-copy{padding:28px 22px;}
+.dhero-eye{font-size:11px;letter-spacing:3px;}
+.dhero-name{font-size:38px;}
+.dhero-p{font-size:15px;}
+.dhero-btns{flex-direction:column;gap:12px;}
+.d-cta{width:100%;justify-content:center;height:54px;}
+.dhero-q{font-size:18px;}
+.dstats{gap:12px;}
+.dstat{flex-direction:column;align-items:flex-start;gap:10px;padding:16px;}
+.dstat .d-chev{display:none;}
+.d-icirc{width:44px;height:44px;}
+.dstat-n{font-size:28px;}
+.dcard{padding:18px;}
+.dcard-t{font-size:22px;}
+.drow{flex-wrap:wrap;align-items:flex-start;gap:12px;}
+.drow-th{width:46px;height:46px;font-size:20px;}
+.drow-inf{flex-basis:calc(100% - 60px);}
+.drow-meta{flex-basis:100%;justify-content:space-between;flex-wrap:wrap;gap:10px;}
+.drow-date{min-width:0;text-align:left;}
+.dqa{grid-template-columns:1fr;}
+.dthemes{grid-template-columns:repeat(2,minmax(0,1fr));}
+}
+@media(prefers-reduced-motion:reduce){.d-cta,.dstat,.dtheme,.dtoken-fill{transition:none;}.d-cta:hover,.dstat:hover,.dtheme:hover{transform:none;}}
+/* HALAMAN PENERIMA (Premium) */
+.rv-root{min-height:100vh;transition:background .6s;background:radial-gradient(circle at 50% 0%,rgba(223,174,75,.09),transparent 34%),#FBF8F2;}
+.rv-page{position:relative;z-index:1;max-width:1000px;margin:0 auto;padding:84px 24px 64px;display:flex;flex-direction:column;gap:18px;}
+.rv-sender{display:flex;align-items:center;gap:16px;padding:16px 22px;background:#FFFDF8;border:1px solid rgba(215,163,60,.4);border-radius:20px;box-shadow:0 10px 30px rgba(39,28,12,.07),0 2px 8px rgba(39,28,12,.04);animation:rvIn .3s ease-out both;}
+.rv-av{overflow:hidden;width:52px;height:52px;border-radius:50%;flex-shrink:0;background:linear-gradient(135deg,#F1C761,#A87922);color:#17130E;font-weight:700;font-size:17px;display:flex;align-items:center;justify-content:center;}
+.rv-av img,.d-av img,.av-pick-ph img{width:100%;height:100%;object-fit:cover;display:block;}
+.rv-av:has(img),.d-av:has(img){background:#fff;border:1.5px solid #D7A33C;}
+.rv-sname{font-family:'Playfair Display','Cormorant Garamond',serif;font-size:21px;color:#17130E;line-height:1.2;overflow-wrap:anywhere;}
+.rv-sco{font-size:14px;color:#766E65;margin-top:2px;overflow-wrap:anywhere;}
+.rv-badge{margin-left:auto;flex-shrink:0;display:inline-flex;align-items:center;gap:6px;height:34px;padding:0 14px;border-radius:17px;background:#E3F6EC;color:#168152;border:1px solid #BFE8D2;font-size:14px;font-weight:600;}
+.rv-hero{position:relative;min-height:380px;border-radius:24px;overflow:hidden;background:#052E1C;border:1px solid rgba(215,163,60,.55);box-shadow:0 24px 54px rgba(39,28,12,.24);display:flex;align-items:center;animation:rvIn .3s .05s ease-out both;}
+.rv-hero.locked{background:#0D0A06;}
+.rv-hero.opened{min-height:300px;}
+.rv-hero-img{position:absolute;right:0;top:0;height:100%;width:auto;max-width:none;display:block;-webkit-mask-image:linear-gradient(90deg,transparent 0%,#000 40%);mask-image:linear-gradient(90deg,transparent 0%,#000 40%);}
+.rv-hero-ov{position:absolute;inset:0;background:linear-gradient(90deg,rgba(4,38,22,.94) 0%,rgba(4,38,22,.8) 36%,rgba(4,38,22,.22) 66%,rgba(4,38,22,.1) 100%);}
+.rv-hero.locked .rv-hero-ov{background:linear-gradient(90deg,rgba(10,7,3,.95) 0%,rgba(10,7,3,.82) 36%,rgba(10,7,3,.3) 66%,rgba(10,7,3,.18) 100%);}
+.rv-hero-copy{position:relative;z-index:1;padding:44px 52px 64px;max-width:600px;}
+.rv-eye{display:flex;align-items:center;gap:10px;font-size:13px;font-weight:600;letter-spacing:4px;text-transform:uppercase;color:#F1C761;margin-bottom:14px;}
+.rv-eye::after{content:"";width:56px;height:1px;background:linear-gradient(90deg,#D7A33C,transparent);}
+.rv-name{font-family:'Playfair Display','Cormorant Garamond',Georgia,serif;font-size:54px;font-weight:500;line-height:1.08;color:#FFF9EF;margin-bottom:14px;overflow-wrap:anywhere;}
+.rv-sub{font-size:18px;line-height:1.5;color:rgba(255,249,239,.9);}
+.rv-sub strong{color:#FFE5A0;font-weight:600;}
+.rv-tag{display:inline-flex;align-items:center;height:30px;padding:0 14px;border-radius:15px;background:rgba(255,249,239,.14);border:1px solid rgba(241,199,97,.5);color:#FFE5A0;font-size:13px;font-weight:600;}
+.rv-panel{position:relative;z-index:2;margin:-48px 32px 0;padding:28px;background:#FFFDF8;border:1px solid rgba(173,126,40,.18);border-radius:22px;box-shadow:0 18px 44px rgba(39,28,12,.14),0 2px 8px rgba(39,28,12,.05);display:flex;flex-direction:column;gap:16px;animation:rvIn .3s .1s ease-out both;}
+.rv-open{width:100%;min-height:68px;padding:12px 20px;border-radius:15px;background:linear-gradient(180deg,#0B5A36,#063D25);border:1px solid #D7A33C;color:#FFF9EF;font-family:'Outfit',sans-serif;font-size:20px;font-weight:600;cursor:pointer;display:flex;align-items:center;justify-content:center;gap:12px;box-shadow:inset 0 1px 0 rgba(255,255,255,.12),0 10px 24px rgba(6,61,37,.28);transition:transform .18s,box-shadow .18s,filter .18s;}
+.rv-open:hover{transform:translateY(-1px);filter:brightness(1.08);box-shadow:inset 0 1px 0 rgba(255,255,255,.14),0 14px 30px rgba(6,61,37,.34);}
+.rv-open:active{transform:translateY(0);}
+.rv-safe{display:flex;align-items:center;gap:10px;padding:12px 16px;border-radius:12px;background:#EEF9F3;border:1px solid #CDEBDB;color:#17694A;font-size:14px;line-height:1.5;}
+.rv-safe svg{flex-shrink:0;color:#1FA86A;}
+.rv-safe strong{font-weight:600;}
+.rv-report{align-self:center;display:inline-flex;align-items:center;gap:8px;min-height:44px;padding:0 16px;border-radius:10px;background:#FFF6F5;border:1px solid #F3C4C0;color:#C7392F;font-family:'Outfit',sans-serif;font-size:13px;font-weight:600;cursor:pointer;transition:background .18s;}
+.rv-report:hover{background:#FDEBE9;}
+.rv-cd{display:grid;grid-template-columns:repeat(4,minmax(0,1fr));gap:12px;}
+.rv-cd-c{padding:16px 6px;text-align:center;background:#FBF6EA;border:1px solid rgba(173,126,40,.18);border-radius:14px;}
+.rv-cd-n{font-family:'Playfair Display',serif;font-size:36px;font-weight:500;color:#B8862B;line-height:1;}
+.rv-cd-l{font-size:11px;letter-spacing:2px;text-transform:uppercase;color:#766E65;margin-top:8px;}
+.rv-when{display:flex;align-items:center;justify-content:center;gap:8px;flex-wrap:wrap;padding:12px 14px;border-radius:12px;background:#FBF6EA;border:1px dashed rgba(173,126,40,.35);font-size:14px;color:#766E65;text-align:center;}
+.rv-when strong{color:#17130E;}
+.rv-from{display:flex;align-items:center;gap:12px;padding-bottom:16px;border-bottom:1px solid rgba(173,126,40,.18);}
+.rv-from .rv-av{width:42px;height:42px;font-size:14px;}
+.rv-from-l{font-size:11px;letter-spacing:1.5px;text-transform:uppercase;color:#766E65;}
+.rv-from-n{font-size:15px;font-weight:600;color:#17130E;overflow-wrap:anywhere;}
+.rv-msg{font-family:'Cormorant Garamond',serif;font-size:21px;line-height:1.75;color:#2C2825;white-space:pre-wrap;overflow-wrap:anywhere;}
+.rv-imgs img{width:100%;border-radius:14px;margin-top:10px;object-fit:cover;display:block;}
+.rv-foot{display:flex;align-items:center;justify-content:space-between;flex-wrap:wrap;gap:10px;padding-top:16px;border-top:1px solid rgba(173,126,40,.18);font-size:13px;color:#766E65;}
+.rv-foot-b{display:flex;gap:8px;flex-wrap:wrap;}
+.rv-share{display:inline-flex;align-items:center;gap:8px;min-height:44px;padding:0 16px;border-radius:10px;background:#17130E;color:#F1C761;border:none;font-family:'Outfit',sans-serif;font-size:13px;font-weight:600;cursor:pointer;}
+.rv-opening{min-height:100vh;display:flex;flex-direction:column;align-items:center;justify-content:center;text-align:center;padding:32px;background:radial-gradient(circle at 50% 30%,rgba(223,174,75,.14),transparent 45%),#FBF8F2;}
+.rv-opening-ph{width:132px;height:132px;border-radius:50%;overflow:hidden;border:3px solid #D7A33C;box-shadow:0 0 0 8px rgba(215,163,60,.14),0 18px 40px rgba(39,28,12,.2);margin-bottom:24px;animation:rvPulse 1.6s ease-in-out infinite;}
+.rv-opening-ph img{width:100%;height:100%;object-fit:cover;display:block;}
+.rv-opening-t{font-family:'Playfair Display',serif;font-size:28px;color:#17130E;}
+.rv-opening-s{font-size:15px;color:#766E65;margin-top:8px;}
+@keyframes rvIn{from{opacity:0;transform:translateY(10px);}to{opacity:1;transform:none;}}
+@keyframes rvPulse{0%,100%{transform:scale(1);}50%{transform:scale(1.04);}}
+@media(max-width:768px){
+.rv-page{padding:96px 16px 48px;gap:14px;}
+.rv-sender{padding:12px 14px;gap:12px;border-radius:18px;}
+.rv-av{width:44px;height:44px;font-size:15px;}
+.rv-sname{font-size:18px;}
+.rv-sco{font-size:13px;}
+.rv-badge{height:30px;padding:0 10px;font-size:13px;}
+.rv-hero{min-height:420px;align-items:flex-end;border-radius:20px;}
+.rv-hero.opened{min-height:340px;}
+.rv-hero-img{left:0;right:0;width:100%;height:58%;object-fit:cover;-webkit-mask-image:none;mask-image:none;}
+.rv-hero-ov{background:linear-gradient(180deg,rgba(5,46,28,.05) 0%,rgba(5,46,28,.3) 32%,#052E1C 58%);}
+.rv-hero.locked .rv-hero-ov{background:linear-gradient(180deg,rgba(13,10,6,.15) 0%,rgba(13,10,6,.45) 32%,#0D0A06 58%);}
+.rv-hero-copy{padding:28px 22px 44px;}
+.rv-eye{font-size:11px;letter-spacing:3px;}
+.rv-name{font-size:38px;}
+.rv-sub{font-size:16px;}
+.rv-panel{margin:-24px 10px 0;padding:18px;border-radius:20px;}
+.rv-open{min-height:58px;font-size:17px;}
+.rv-cd{gap:8px;}
+.rv-cd-n{font-size:28px;}
+.rv-cd-l{font-size:10px;letter-spacing:1px;}
+.rv-msg{font-size:19px;}
+}
+@media(prefers-reduced-motion:reduce){.rv-sender,.rv-hero,.rv-panel,.rv-opening-ph{animation:none;}.rv-open,.rv-open:hover{transition:none;transform:none;}}
 .adm-hdr{background:#111827;border-bottom:1px solid #374151;height:52px;display:flex;align-items:center;justify-content:space-between;padding:0 22px;position:sticky;top:0;z-index:99;}
 .adm-logo{display:flex;align-items:center;gap:8px;color:#D1D5DB;font-size:13px;font-weight:600;}
 .adm-logo img{width:34px;height:34px;object-fit:cover;border-radius:6px;}
@@ -670,16 +971,22 @@ function ReceiverPage({ capsule, onBack }) {
   useEffect(()=>{ const t=setInterval(()=>setCd(getCD(capsule.openAt)),1000); return()=>clearInterval(t); },[capsule.openAt]);
   function doOpen(){ setPhase("opening"); setTimeout(()=>setPhase("opened"),2200); }
 
+  const senderLabel = capsule.company || rtOf(capsule).label;
+  // Foto hero mengikuti tema capsule; tema tanpa foto memakai foto kapsul CapsuleMe.
+  const heroImg = THEME_PHOTOS[capsule.theme] || THEME_HERO_FALLBACK;
+  const senderAvatar = safeAvatar(capsule.avatar);
+  const heroFallback = e => { if(!e.currentTarget.dataset.fb){ e.currentTarget.dataset.fb="1"; e.currentTarget.src=THEME_HERO_FALLBACK; } };
+
   if (phase==="opening") return (
-    <div style={{minHeight:"100vh",background:theme.bg}}>
-      <div className="opening-pg"><div className="opening-ico">📦</div><div className="opening-ttl">Membuka capsulemu…</div><div className="opening-sub">Sebentar lagi, sesuatu istimewa menantimu 🌟</div></div>
+    <div className="rv-opening">
+      <div className="rv-opening-ph"><img src={heroImg} alt="" onError={heroFallback}/></div>
+      <div className="rv-opening-t">Membuka capsulemu…</div>
+      <div className="rv-opening-s">Sebentar lagi, sesuatu istimewa menantimu.</div>
     </div>
   );
 
-  const senderLabel = capsule.company || rtOf(capsule).label;
-
   return (
-    <div style={{background:phase==="opened"?theme.bg:"#F7F4EF",minHeight:"100vh",transition:"background .6s"}}>
+    <div className="rv-root" style={phase==="opened"?{background:theme.bg}:undefined}>
       {phase==="opened" && <Particles emoji={theme.particle}/>}
       {showReport && <ReportModal onClose={()=>setShowReport(false)}/>}
       <div className="trust-bar">
@@ -688,61 +995,61 @@ function ReceiverPage({ capsule, onBack }) {
         <span className="tb-vf">✓ Terverifikasi</span>
         <button className="tb-back" onClick={onBack}>← Kembali</button>
       </div>
-      <div className="rcv-page">
-        <div className="sndr-card">
-          <div className="sndr-av">{initials(capsule.from)}</div>
-          <div><div className="sndr-name">{capsule.from}</div><div className="sndr-co">{senderLabel}</div></div>
-          <div className="sndr-ok">✅ Resmi</div>
+      <div className="rv-page">
+        <div className="rv-sender">
+          <div className="rv-av">{senderAvatar ? <img src={senderAvatar} alt=""/> : initials(capsule.from)}</div>
+          <div style={{minWidth:0}}><div className="rv-sname">{capsule.from}</div><div className="rv-sco">{senderLabel}</div></div>
+          <div className="rv-badge"><DIcon name="check" size={16} sw={2.4}/>Resmi</div>
         </div>
-        <div className="rcv-card">
-          {phase==="locked" && (
-            <div className="lk-wrap">
-              <div className="lk-top"><div className="lk-ring">🔒</div><div className="lk-label">Ada sesuatu untukmu</div><div className="lk-name">{capsule.to}</div></div>
-              <div className="lk-body">
-                <p className="lk-msg"><strong>{capsule.from}</strong> menyimpan pesan istimewa untukmu. Sabar ya 🌟</p>
-                <div className="cd-grid">{[{v:cd.d,l:"Hari"},{v:cd.h,l:"Jam"},{v:cd.m,l:"Menit"},{v:cd.s,l:"Detik"}].map(({v,l})=><div key={l} className="cd-cell"><div className="cd-n">{String(v).padStart(2,"0")}</div><div className="cd-l">{l}</div></div>)}</div>
-                <div className="open-row">📅 Terbuka pada <strong>{fmtLong(capsule.openAt)}</strong></div>
-                <div className="safe-row"><div className="safe-ico">🛡️</div><div className="safe-txt"><strong>Ini bukan spam.</strong> Pesan resmi via CapsuleMe. Tidak ada data yang diminta.</div></div>
-                <div style={{marginTop:10,textAlign:"center"}}><button className="report-b" onClick={()=>setShowReport(true)}>🚩 Laporkan Konten</button></div>
-              </div>
+
+        <div>
+          <section className={`rv-hero ${phase}`}>
+            <img className="rv-hero-img" src={heroImg} alt="" onError={heroFallback} style={{objectPosition:THEME_FOCUS[capsule.theme]||"center"}}/>
+            <div className="rv-hero-ov"/>
+            <div className="rv-hero-copy">
+              {phase==="locked" && <>
+                <div className="rv-eye">Ada sesuatu untukmu</div>
+                <h1 className="rv-name">{capsule.to}</h1>
+                <p className="rv-sub"><strong>{capsule.from}</strong> menyimpan pesan istimewa untukmu. Sabar ya.</p>
+              </>}
+              {phase==="ready" && <>
+                <div className="rv-eye">Capsulemu siap!</div>
+                <h1 className="rv-name">{capsule.to}</h1>
+                <p className="rv-sub"><strong>{capsule.from}</strong> punya pesan spesial untukmu!</p>
+              </>}
+              {phase==="opened" && <>
+                <div className="rv-eye">Untuk</div>
+                <h1 className="rv-name">{capsule.to}</h1>
+                <span className="rv-tag">{theme.label}</span>
+              </>}
             </div>
-          )}
-          {phase==="ready" && (
-            <div className="lk-wrap">
-              <div className="lk-top" style={{background:"linear-gradient(135deg,#166534,#14532D)"}}>
-                <div className="lk-ring" style={{borderColor:"rgba(187,247,208,.5)"}}>🎁</div>
-                <div className="lk-label" style={{color:"#BBF7D0"}}>Capsulemu siap!</div>
-                <div className="lk-name">{capsule.to}</div>
+          </section>
+
+          <div className="rv-panel">
+            {phase==="locked" && <>
+              <div className="rv-cd">{[{v:cd.d,l:"Hari"},{v:cd.h,l:"Jam"},{v:cd.m,l:"Menit"},{v:cd.s,l:"Detik"}].map(({v,l})=><div key={l} className="rv-cd-c"><div className="rv-cd-n">{String(v).padStart(2,"0")}</div><div className="rv-cd-l">{l}</div></div>)}</div>
+              <div className="rv-when"><DIcon name="calendar" size={18}/>Terbuka pada <strong>{fmtLong(capsule.openAt)}</strong></div>
+              <div className="rv-safe"><DIcon name="shield" size={20}/><span><strong>Ini bukan spam.</strong> Pesan resmi via CapsuleMe. Tidak ada data yang diminta.</span></div>
+              <button className="rv-report" onClick={()=>setShowReport(true)}><DIcon name="flag" size={16}/>Laporkan Konten</button>
+            </>}
+            {phase==="ready" && <>
+              <button className="rv-open" onClick={doOpen}>Buka Capsule Sekarang <DIcon name="arrow" size={22} sw={2.2}/></button>
+              <div className="rv-safe"><DIcon name="shield" size={20}/><span><strong>Aman 100%.</strong> Tidak ada data yang diminta.</span></div>
+              <button className="rv-report" onClick={()=>setShowReport(true)}><DIcon name="flag" size={16}/>Laporkan Konten</button>
+            </>}
+            {phase==="opened" && <>
+              <div className="rv-from">
+                <div className="rv-av">{senderAvatar ? <img src={senderAvatar} alt=""/> : initials(capsule.from)}</div>
+                <div style={{minWidth:0}}><div className="rv-from-l">Pesan dari</div><div className="rv-from-n">{capsule.from}{capsule.company?` · ${capsule.company}`:""}</div></div>
               </div>
-              <div className="lk-body">
-                <p className="lk-msg"><strong>{capsule.from}</strong> punya pesan spesial untukmu!</p>
-                <button className="btn-main" style={{background:"#166534",color:"#fff"}} onClick={doOpen}>🎁 Buka Capsule Sekarang</button>
-                <div className="safe-row" style={{marginTop:10}}><div className="safe-ico">🛡️</div><div className="safe-txt"><strong>Aman 100%.</strong> Tidak ada data yang diminta.</div></div>
-                <div style={{marginTop:10,textAlign:"center"}}><button className="report-b" onClick={()=>setShowReport(true)}>🚩 Laporkan Konten</button></div>
+              <div className="rv-msg">{capsule.message}</div>
+              {capsule.images?.length>0 && <div className="rv-imgs">{capsule.images.map((s,i)=><img key={i} src={s} alt=""/>)}</div>}
+              <div className="rv-foot">
+                <span>Dikirim via CapsuleMe ✦</span>
+                <div className="rv-foot-b"><button className="rv-share"><DIcon name="link" size={16}/>Bagikan</button><button className="rv-report" onClick={()=>setShowReport(true)}><DIcon name="flag" size={16}/>Laporkan</button></div>
               </div>
-            </div>
-          )}
-          {phase==="opened" && (
-            <div className="op-wrap">
-              <div className="op-top" style={{background:theme.bg}}>
-                <span className="op-emoji">{theme.emoji}</span>
-                <div className="op-to">Untuk</div><div className="op-name">{capsule.to}</div>
-                <span className="op-lbl" style={{background:theme.accent+"20",color:theme.accent}}>{theme.label}</span>
-              </div>
-              <div className="op-body">
-                <div className="from-row">
-                  <div className="from-av">{initials(capsule.from)}</div>
-                  <div><div className="from-lbl">Pesan dari</div><div className="from-nm">{capsule.from}{capsule.company?` · ${capsule.company}`:""}</div></div>
-                </div>
-                <div className="op-msg">{capsule.message}</div>
-                {capsule.images?.length>0 && <div style={{marginTop:10}}>{capsule.images.map((s,i)=><img key={i} src={s} alt="" style={{width:"100%",borderRadius:8,marginTop:6,objectFit:"cover"}}/>)}</div>}
-                <div className="op-foot">
-                  <span>Dikirim via CapsuleMe ✦</span>
-                  <div style={{display:"flex",gap:6}}><button className="share-b">🔗 Bagikan</button><button className="report-b" onClick={()=>setShowReport(true)}>🚩 Laporkan</button></div>
-                </div>
-              </div>
-            </div>
-          )}
+            </>}
+          </div>
         </div>
       </div>
     </div>
@@ -750,7 +1057,7 @@ function ReceiverPage({ capsule, onBack }) {
 }
 
 /* ═══════════════════ CREATE FORM ═══════════════════ */
-function CreateForm({ setCapsules, onSuccess, credits, spendCredit }) {
+function CreateForm({ setCapsules, onSuccess, credits, spendCredit, avatar, avatarErr, onPickAvatar, onRemoveAvatar }) {
   const [form,setForm]=useState({to:"",email:"",from:"",company:"",message:"",openAt:"",theme:"birthday",recipientType:"personal",msgMode:"tulis"});
   const [images,setImages]=useState([]); const [fileErr,setFileErr]=useState(""); const [selTpl,setSelTpl]=useState(null);
   const [sendErr,setSendErr]=useState(""); const [submitting,setSubmitting]=useState(false);
@@ -770,7 +1077,7 @@ function CreateForm({ setCapsules, onSuccess, credits, spendCredit }) {
     setSendErr("");
     setSubmitting(true);
     if (!spendCredit()) { setSubmitting(false); return; }
-    const c = { id:Date.now(), from:form.from||"Pengirim", company:form.company, to:form.to, email:form.email, message:form.message, theme:form.theme, openAt:form.openAt, images:images.map(i=>i.url), recipientType:form.recipientType };
+    const c = { id:Date.now(), from:form.from||"Pengirim", company:form.company, to:form.to, email:form.email, message:form.message, theme:form.theme, openAt:form.openAt, images:images.map(i=>i.url), recipientType:form.recipientType, avatar:avatar||"" };
     if (form.email && form.email.includes("@")) {
       try {
         const res = await fetch("/.netlify/functions/create-capsule", {
@@ -812,6 +1119,15 @@ function CreateForm({ setCapsules, onSuccess, credits, spendCredit }) {
 
       <div className="card" style={{animationDelay:".04s"}}>
         <div className="card-ttl">👤 Pengirim & Penerima</div><div className="card-sub">Isi data pengirim dan penerima</div>
+        <div className="av-pick">
+          <div className="av-pick-ph">{avatar ? <img src={avatar} alt=""/> : initials(form.from||"Pengirim")}</div>
+          <div className="av-pick-t"><strong>Logo atau foto pengirim</strong>Tampil di halaman penerima menggantikan inisial. Paling bagus gambar persegi.</div>
+          <div className="av-pick-b">
+            <button type="button" className="av-btn" onClick={onPickAvatar}>{avatar ? "Ganti" : "Pilih gambar"}</button>
+            {avatar && <button type="button" className="av-btn-x" onClick={onRemoveAvatar}>Hapus</button>}
+          </div>
+          {avatarErr && <div className="av-err">{avatarErr}</div>}
+        </div>
         <div className="frow">
           <div className="fg"><label>Namamu</label><input name="from" value={form.from} onChange={fc} placeholder="Nama kamu"/></div>
           {form.recipientType==="company"
@@ -827,7 +1143,7 @@ function CreateForm({ setCapsules, onSuccess, credits, spendCredit }) {
       <div className="card" style={{animationDelay:".08s"}}>
         <div className="card-ttl">🎨 Tema — {THEMES.length} pilihan</div><div className="card-sub">Pilih tema sesuai momen</div>
         <div className="theme-grid">
-          {THEMES.map(t=><div key={t.id} className={`topt ${form.theme===t.id?"on":""}`} onClick={()=>{setForm(f=>({...f,theme:t.id}));setSelTpl(null);}}><div className="topt-e">{t.emoji}</div><div className="topt-l">{t.label}</div></div>)}
+          {THEMES.map(t=><div key={t.id} className={`topt ${form.theme===t.id?"on":""}`} onClick={()=>{setForm(f=>({...f,theme:t.id}));setSelTpl(null);}}>{THEME_PHOTOS[t.id] ? <img className="topt-ph" src={THEME_PHOTOS[t.id]} alt=""/> : <div className="topt-e">{t.emoji}</div>}<div className="topt-l">{t.label}</div></div>)}
         </div>
       </div>
 
@@ -962,7 +1278,52 @@ function AboutPage({ onStart }) {
 }
 
 /* ═══════════════════ SENDER APP ═══════════════════ */
-function SenderApp({ accessCode }) {
+// Foto tema (public/assets/themes). Tema tanpa foto tetap memakai emoji.
+const THEME_PHOTOS = {
+  birthday:"/assets/themes/birthday.jpg",
+  graduation:"/assets/themes/graduation.jpg",
+  achievement:"/assets/themes/achievement.jpg",
+  love:"/assets/themes/love.jpg",
+  anniversary:"/assets/themes/anniversary.jpg",
+  surprise:"/assets/themes/surprise.jpg",
+  promotion:"/assets/themes/promotion.jpg",
+  farewell:"/assets/themes/farewell.jpg",
+  motivation:"/assets/themes/motivation.jpg",
+  newhouse:"/assets/themes/newhouse.jpg",
+};
+
+// Tema tanpa foto (atau ID tak dikenal) memakai foto kapsul CapsuleMe sebagai hero.
+const THEME_HERO_FALLBACK = "/assets/capsuleme-premium-hero.jpg";
+// Titik fokus foto hero di layar HP (object-position).
+const THEME_FOCUS = { birthday:"45% center", graduation:"55% center", farewell:"70% center", motivation:"35% center" };
+
+const D_ICONS = {
+  check:   <path d="m5 12 5 5 9-10"/>,
+  shield:  <><path d="M12 3 5 6v5c0 4.5 3 8.3 7 10 4-1.7 7-5.5 7-10V6z"/><path d="m9 12 2 2 4-4"/></>,
+  flag:    <><path d="M5 21V4"/><path d="M5 4h11l-2 4 2 4H5"/></>,
+  calendar:<><rect x="4" y="5" width="16" height="15" rx="2"/><path d="M4 10h16"/><path d="M8 3v4"/><path d="M16 3v4"/></>,
+  link:    <><path d="M10 14a4 4 0 0 0 5.7 0l3-3a4 4 0 0 0-5.7-5.7l-1 1"/><path d="M14 10a4 4 0 0 0-5.7 0l-3 3a4 4 0 0 0 5.7 5.7l1-1"/></>,
+  plus:    <><path d="M12 5v14"/><path d="M5 12h14"/></>,
+  arrow:   <><path d="M5 12h14"/><path d="m13 6 6 6-6 6"/></>,
+  chev:    <path d="m9 6 6 6-6 6"/>,
+  chevDown:<path d="m6 9 6 6 6-6"/>,
+  folder:  <path d="M3 7a2 2 0 0 1 2-2h4l2 2h8a2 2 0 0 1 2 2v8a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2z"/>,
+  capsule: <><rect x="2.5" y="8" width="19" height="8" rx="4"/><path d="M12 8v8"/></>,
+  lock:    <><rect x="5" y="11" width="14" height="9" rx="2"/><path d="M8 11V8a4 4 0 0 1 8 0v3"/></>,
+  unlock:  <><rect x="5" y="11" width="14" height="9" rx="2"/><path d="M8 11V8a4 4 0 0 1 7.5-2"/></>,
+  palette: <><path d="M12 3a9 9 0 1 0 0 18c1.1 0 1.5-.8 1.5-1.5 0-.9-.7-1.3-.7-2.1 0-.9.7-1.4 1.6-1.4H17a4 4 0 0 0 4-4c0-5-4-9-9-9z"/><circle cx="7.5" cy="11" r="1"/><circle cx="10" cy="7" r="1"/><circle cx="15" cy="7.5" r="1"/></>,
+  bell:    <><path d="M6 8a6 6 0 0 1 12 0c0 7 3 8 3 8H3s3-1 3-8"/><path d="M10 20a2 2 0 0 0 4 0"/></>,
+  coin:    <><circle cx="12" cy="12" r="8"/><path d="M12 8v8"/><path d="M9.5 10.5h4a1.5 1.5 0 0 1 0 3h-3"/></>,
+  gear:    <><circle cx="12" cy="12" r="3"/><path d="M19.4 15a1.7 1.7 0 0 0 .3 1.8l.1.1a2 2 0 1 1-2.8 2.8l-.1-.1a1.7 1.7 0 0 0-1.8-.3 1.7 1.7 0 0 0-1 1.5V21a2 2 0 1 1-4 0v-.1a1.7 1.7 0 0 0-1.1-1.5 1.7 1.7 0 0 0-1.8.3l-.1.1a2 2 0 1 1-2.8-2.8l.1-.1a1.7 1.7 0 0 0 .3-1.8 1.7 1.7 0 0 0-1.5-1H3a2 2 0 1 1 0-4h.1a1.7 1.7 0 0 0 1.5-1.1 1.7 1.7 0 0 0-.3-1.8l-.1-.1a2 2 0 1 1 2.8-2.8l.1.1a1.7 1.7 0 0 0 1.8.3H9a1.7 1.7 0 0 0 1-1.5V3a2 2 0 1 1 4 0v.1a1.7 1.7 0 0 0 1 1.5 1.7 1.7 0 0 0 1.8-.3l.1-.1a2 2 0 1 1 2.8 2.8l-.1.1a1.7 1.7 0 0 0-.3 1.8V9a1.7 1.7 0 0 0 1.5 1H21a2 2 0 1 1 0 4h-.1a1.7 1.7 0 0 0-1.5 1z"/></>,
+  info:    <><circle cx="12" cy="12" r="9"/><path d="M12 11v5"/><path d="M12 8h.01"/></>,
+  logout:  <><path d="M9 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h4"/><path d="m16 17 5-5-5-5"/><path d="M21 12H9"/></>,
+  home:    <><path d="m3 11 9-7 9 7"/><path d="M5 10v10h14V10"/></>,
+};
+function DIcon({ name, size=20, sw=1.8 }) {
+  return <svg width={size} height={size} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth={sw} strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">{D_ICONS[name]}</svg>;
+}
+
+function SenderApp({ accessCode, onLogout }) {
   const [tab,setTab]=useState("home");
   const [capsules,setCapsules]=useState(readCapsules);
   const [credits,setCredits]=useState(() => Number(localStorage.getItem("timecapsule_sender_credits")) || DEFAULT_CREDITS);
@@ -972,6 +1333,71 @@ function SenderApp({ accessCode }) {
   const [viewing,setViewing]=useState(null);
   const readyCount = capsules.filter(c=>isReady(c.openAt)).length;
   const sender = JSON.parse(sessionStorage.getItem("capsuleme_sender") || "{}");
+  const [menuOpen,setMenuOpen]=useState(false);
+  const avatarKey = `capsuleme_sender_avatar_${sender.id ?? accessCode ?? "local"}`;
+  const [avatar,setAvatar]=useState(()=>safeAvatar(localStorage.getItem(avatarKey)));
+  const [avatarErr,setAvatarErr]=useState("");
+  const avatarRef = useRef();
+  async function handleAvatarFile(e) {
+    const file=e.target.files[0]; e.target.value="";
+    if (!file) return;
+    const err=validateFile(file);
+    if (err) { setAvatarErr(err); return; }
+    try { const url=await makeAvatar(file); localStorage.setItem(avatarKey,url); setAvatar(url); setAvatarErr(""); }
+    catch { setAvatarErr("Gambar tidak bisa dibaca. Coba file lain."); }
+  }
+  function removeAvatar() { localStorage.removeItem(avatarKey); setAvatar(""); setAvatarErr(""); }
+  const pickAvatar = () => avatarRef.current && avatarRef.current.click();
+  const senderName = sender.name || "Pengirim";
+  const tokenSisa = sender.sisa ?? 0;
+  const tokenTotal = sender.total ?? 0;
+  const popularThemes = THEMES
+    .map(t=>({...t, n:capsules.filter(c=>c.theme===t.id).length}))
+    .sort((a,b)=>b.n-a.n)
+    .slice(0,4);
+
+  const renderHeader = () => (
+    <header className="dhdr">
+      <input ref={avatarRef} type="file" accept="image/jpeg,image/png,image/webp,image/gif" hidden onChange={handleAvatarFile}/>
+      <button className="d-brand" onClick={()=>setTab("home")} title="CapsuleMe">
+        <div className="hdr-logo"><img src="/capsuleme-logo.png" alt=""/></div>
+        <span className="d-brand-t">Capsule<em>Me</em></span>
+      </button>
+      <nav className="d-nav">
+        <button className={`d-nb ${tab==="home"?"on":""}`} onClick={()=>setTab("home")}><DIcon name="home" size={18}/>Beranda</button>
+        <button className={`d-nb ${tab==="create"?"on":""}`} onClick={()=>setTab("create")}><DIcon name="plus" size={18}/>Buat</button>
+        <button className={`d-nb ${tab==="inbox"?"on":""}`} onClick={()=>setTab("inbox")}><DIcon name="folder" size={18}/>Kapsulku</button>
+        <button className={`d-nb ${tab==="about"?"on":""}`} onClick={()=>setTab("about")}><DIcon name="info" size={18}/>Info</button>
+      </nav>
+      <div className="d-right">
+        <div className="d-credit" title="Sisa token"><DIcon name="coin" size={18}/><span className="d-credit-l">Token</span><b>{tokenSisa}</b></div>
+        <button className="d-ico-btn" onClick={()=>setTab("inbox")} title={readyCount>0?`${readyCount} capsule siap dibuka`:"Tidak ada notifikasi"} aria-label="Notifikasi">
+          <DIcon name="bell"/>
+          {readyCount>0 && <span className="d-badge">{readyCount}</span>}
+        </button>
+        <div className="d-prof-wrap">
+          <button className="d-prof" onClick={()=>setMenuOpen(v=>!v)} aria-expanded={menuOpen} aria-label="Menu profil">
+            <span className="d-av">{avatar ? <img src={avatar} alt=""/> : initials(senderName)}</span>
+            <span className="d-prof-txt">
+              <span className="d-prof-n">{senderName}</span>
+              <span className="d-prof-s">{sender.company || sender.email || "Pengirim"}</span>
+            </span>
+            <DIcon name="chevDown" size={16}/>
+          </button>
+          {menuOpen && <>
+            <div className="d-menu-ov" onClick={()=>setMenuOpen(false)}/>
+            <div className="d-menu">
+              <button onClick={()=>{setMenuOpen(false);setTab("inbox");}}><DIcon name="folder" size={18}/>Kapsulku</button>
+              <button onClick={pickAvatar}><DIcon name="palette" size={18}/>{avatar ? "Ganti logo / foto" : "Pasang logo / foto"}</button>
+              {avatar && <button onClick={removeAvatar}><DIcon name="flag" size={18}/>Hapus logo / foto</button>}
+              {avatarErr && <div className="d-menu-err">{avatarErr}</div>}
+              <button className="d-menu-out" onClick={()=>{setMenuOpen(false);onLogout();}}><DIcon name="logout" size={18}/>Keluar</button>
+            </div>
+          </>}
+        </div>
+      </div>
+    </header>
+  );
 
   useEffect(()=>{ localStorage.setItem("timecapsule_capsules", JSON.stringify(capsules)); },[capsules]);
   useEffect(()=>{ localStorage.setItem("timecapsule_sender_credits", String(credits)); },[credits]);
@@ -992,12 +1418,7 @@ function SenderApp({ accessCode }) {
   if (tab==="about") return (
     <>
       <style>{css}</style>
-      <header className="hdr">
-        <div className="hdr-logo" onClick={()=>setTab("home")} title="CapsuleMe"><img src="/capsuleme-logo.png" alt="CapsuleMe"/></div>
-        <nav className="nav">
-          <button className="nb" onClick={()=>setTab("home")}>← Buat Capsule</button>
-        </nav>
-      </header>
+      {renderHeader()}
       <AboutPage onStart={()=>setTab("create")}/>
     </>
   );
@@ -1005,70 +1426,154 @@ function SenderApp({ accessCode }) {
   return (
     <>
       <style>{css}</style>
-      <header className="hdr">
-        <div className="hdr-logo" onClick={()=>setTab("home")} title="CapsuleMe"><img src="/capsuleme-logo.png" alt="CapsuleMe"/></div>
-        <nav className="nav">
-          <button className={`nb ${tab==="home"?"on":""}`} onClick={()=>setTab("home")}>🏠 Beranda</button>
-          <button className={`nb ${tab==="create"?"on":""}`} onClick={()=>setTab("create")}>+ Buat</button>
-          <button className={`nb ${tab==="inbox"?"on":""}`} onClick={()=>setTab("inbox")}>Kapsulku{readyCount>0&&<span className="npill">{readyCount}</span>}</button>
-          <button className="nb" style={{opacity:.9}}>Kredit {credits}</button>
-          <button className={`nb ${tab==="about"?"on":""}`} onClick={()=>setTab("about")} style={{opacity:.6,fontSize:10}}>ℹ️ Info</button>
-        </nav>
-      </header>
+      {renderHeader()}
 
       {tab==="home" && (
-        <div className="wrap">
-          <div style={{background:"linear-gradient(135deg,#0F0E0C,#2C2010)",borderRadius:14,padding:"24px 20px",marginBottom:20,textAlign:"center",position:"relative",overflow:"hidden"}}>
-            <div style={{position:"absolute",inset:0,background:"radial-gradient(ellipse at 50% 0%,rgba(201,168,76,.12),transparent 70%)"}}/>
-            <div style={{position:"relative",zIndex:1}}>
-              <img className="brand-logo-full" src="/capsuleme-logo.png" alt="CapsuleMe - Simpan pesanmu untuk masa depan"/>
-              <div style={{fontFamily:"'Cormorant Garamond',serif",fontSize:22,color:"#F7F4EF",marginBottom:7}}>Selamat datang di <em style={{color:"#C9A84C"}}>CapsuleMe</em></div>
-              <div style={{fontSize:12,color:"#9A9089",lineHeight:1.7,marginBottom:16,maxWidth:380,margin:"0 auto 16px"}}>Buat pesan yang terkunci waktu — untuk keluarga, sahabat, pasangan, atau karyawanmu.</div>
-              <button className="btn-hp" onClick={()=>setTab("create")}>Buat Capsule Pertama →</button>
-            </div>
-          </div>
-        <div style={{background:"#1A1A18",borderRadius:14,padding:"16px 20px",marginBottom:20,border:"1px solid #2C2010"}}>
-  <div style={{display:"flex",justifyContent:"space-between",alignItems:"baseline",marginBottom:10}}>
-    <span style={{fontSize:12,color:"#9A9089"}}>Sisa token</span>
-    <span style={{fontSize:18,color:"#C9A84C",fontWeight:600}}>{sender.sisa ?? 0} <span style={{fontSize:12,color:"#9A9089",fontWeight:400}}>dari {sender.total ?? 0}</span></span>
-  </div>
-  <div style={{height:6,background:"#2C2010",borderRadius:3,overflow:"hidden"}}>
-    <div style={{height:"100%",width:`${sender.total ? (sender.used/sender.total)*100 : 0}%`,background:(sender.sisa ?? 0) > 0 ? "#C9A84C" : "#B4453C",borderRadius:3}}/>
-  </div>
-</div>
-          <div className="stats">
-            <div className="stat"><div className="stat-n">{capsules.length}</div><div className="stat-l">Total Capsule</div></div>
-            <div className="stat"><div className="stat-n">{capsules.filter(c=>!isReady(c.openAt)).length}</div><div className="stat-l">Terkunci</div></div>
-            <div className="stat"><div className="stat-n">{readyCount}</div><div className="stat-l">Siap Buka</div></div>
-            <div className="stat"><div className="stat-n">{THEMES.length}</div><div className="stat-l">Tema</div></div>
-          </div>
+        <div className="dash">
+          <div className="dash-in">
+            <section className="dhero">
+              <div className="dhero-copy">
+                <div className="dhero-eye">Selamat datang kembali,</div>
+                <h1 className="dhero-name">{senderName}</h1>
+                <p className="dhero-p">Abadikan pesan hari ini<br/>untuk masa depan yang lebih bermakna.</p>
+                <div className="dhero-btns">
+                  <button className="d-cta d-cta-p" onClick={()=>setTab("create")}>
+                    <span className="d-cta-plus"><DIcon name="plus" size={18} sw={2.4}/></span>
+                    Buat Capsule Baru <DIcon name="arrow" size={18} sw={2.2}/>
+                  </button>
+                  <button className="d-cta d-cta-s" onClick={()=>setTab("inbox")}>
+                    <DIcon name="folder" size={20}/> Lihat Kapsulku
+                  </button>
+                </div>
+                <div className="dhero-q">“Setiap pesan adalah kenangan<br/>untuk masa depan.”</div>
+              </div>
+            </section>
 
-          <div className="pg-title" style={{fontSize:19}}>Capsule Terbaru</div>
-          <div className="pg-sub">Klik ⚙ Kelola untuk kirim link atau preview</div>
-          <div className="clist">
-            {capsules.slice(0,4).map((c,i)=>{
-              const th=themeOf(c); const tl=timeLeft(c.openAt); const rt=rtOf(c);
-              return (
-                <div key={c.id} className="citem" style={{animationDelay:`${i*.05}s`}}>
-                  <div className="cico">{th.emoji}</div>
-                  <div className="cinf">
-                    <div className="c-to">{rt.icon} {rt.label}</div>
-                    <div className="c-name">{c.to}</div>
-                    <div className="c-prev">{c.message}</div>
-                    {isReady(c.openAt) ? <span className="bdg b-ready"><span className="dot d-r"/>✨ Siap</span> : <span className="bdg b-wait"><span className="dot d-w"/>🔒 {tl}</span>}
+            <div className="dstats">
+              <button className="dstat" onClick={()=>setTab("inbox")}>
+                <span className="d-icirc"><DIcon name="capsule" size={24}/></span>
+                <span><span className="dstat-n">{capsules.length}</span><span className="dstat-l">Total Capsule</span></span>
+                <span className="d-chev"><DIcon name="chev" size={18}/></span>
+              </button>
+              <button className="dstat" onClick={()=>setTab("inbox")}>
+                <span className="d-icirc"><DIcon name="lock" size={24}/></span>
+                <span><span className="dstat-n">{capsules.filter(c=>!isReady(c.openAt)).length}</span><span className="dstat-l">Terkunci</span></span>
+                <span className="d-chev"><DIcon name="chev" size={18}/></span>
+              </button>
+              <button className="dstat" onClick={()=>setTab("inbox")}>
+                <span className="d-icirc"><DIcon name="unlock" size={24}/></span>
+                <span><span className="dstat-n">{readyCount}</span><span className="dstat-l">Siap Buka</span></span>
+                <span className="d-chev"><DIcon name="chev" size={18}/></span>
+              </button>
+              <button className="dstat" onClick={()=>setTab("create")}>
+                <span className="d-icirc"><DIcon name="palette" size={24}/></span>
+                <span><span className="dstat-n">{THEMES.length}</span><span className="dstat-l">Tema Tersedia</span></span>
+                <span className="d-chev"><DIcon name="chev" size={18}/></span>
+              </button>
+            </div>
+
+            <div className="dgrid">
+              <div className="dcol">
+                <div className="dtoken">
+                  <div className="dtoken-top">
+                    <span className="dtoken-coin"><DIcon name="coin" size={26} sw={2}/></span>
+                    <div>
+                      <div className="dtoken-l">Sisa token</div>
+                      <div className="dtoken-h">Setiap capsule yang dikirim memakai 1 token.</div>
+                    </div>
+                    <div className="dtoken-v">{tokenSisa} <span>dari {tokenTotal}</span></div>
                   </div>
-                  <div className="cmeta">
-                    <div className="c-date">{fmtDate(c.openAt)}</div>
-                    <button className="btn-sm" style={{background:"#0F0E0C",color:"#C9A84C",marginTop:6}} onClick={()=>setLinkModal(c)}>⚙ Kelola</button>
+                  <div className="dtoken-bar">
+                    <div className={`dtoken-fill ${tokenSisa>0?"":"empty"}`} style={{width:`${tokenTotal ? Math.min(100,(tokenSisa/tokenTotal)*100) : 0}%`}}/>
                   </div>
                 </div>
-              );
-            })}
+
+                <div className="dcard">
+                  <div className="dcard-h">
+                    <div>
+                      <div className="dcard-t">Capsule Terbaru</div>
+                      <div className="dcard-s">Klik pada capsule untuk melihat detail atau mengelola.</div>
+                    </div>
+                    <button className="d-link" onClick={()=>setTab("inbox")}>Lihat Semua →</button>
+                  </div>
+                  {capsules.length===0
+                    ? <div className="d-empty">Belum ada capsule. Buat yang pertama!</div>
+                    : <div className="drows">
+                        {capsules.slice(0,4).map(c=>{
+                          const th=themeOf(c); const tl=timeLeft(c.openAt); const rt=rtOf(c);
+                          return (
+                            <div key={c.id} className="drow" role="button" tabIndex={0} onClick={()=>setLinkModal(c)} onKeyDown={e=>e.key==="Enter"&&setLinkModal(c)}>
+                              <div className="drow-th" style={{background:th.bg}}>{THEME_PHOTOS[th.id] ? <img src={THEME_PHOTOS[th.id]} alt=""/> : th.emoji}</div>
+                              <div className="drow-inf">
+                                <div className="drow-cat">{rt.label}</div>
+                                <div className="drow-name">{c.to}</div>
+                                <div className="drow-prev">{c.message}</div>
+                              </div>
+                              <div className="drow-meta">
+                                {isReady(c.openAt)
+                                  ? <span className="d-status ready"><DIcon name="unlock" size={14} sw={2}/>Siap</span>
+                                  : <span className="d-status wait"><DIcon name="lock" size={14} sw={2}/>{tl}</span>}
+                                <span className="drow-date">{fmtDate(c.openAt)}</span>
+                                <button className="d-kelola" onClick={e=>{e.stopPropagation();setLinkModal(c);}}><DIcon name="gear" size={16}/>Kelola</button>
+                              </div>
+                            </div>
+                          );
+                        })}
+                      </div>}
+                </div>
+              </div>
+
+              <div className="dcol">
+                <div className="dcard">
+                  <div className="dcard-h"><div className="dcard-t">Aksi Cepat</div></div>
+                  <div className="dqa">
+                    <button className="dqa-i" onClick={()=>setTab("create")}>
+                      <span className="d-icirc"><DIcon name="plus" size={20}/></span>
+                      <span><span className="dqa-t">Buat Capsule Baru</span><span className="dqa-h">Tulis pesan untuk nanti</span></span>
+                      <span className="d-chev"><DIcon name="chev" size={16}/></span>
+                    </button>
+                    <button className="dqa-i" onClick={()=>setTab("inbox")}>
+                      <span className="d-icirc"><DIcon name="folder" size={20}/></span>
+                      <span><span className="dqa-t">Lihat Kapsulku</span><span className="dqa-h">Kelola semua capsule</span></span>
+                      <span className="d-chev"><DIcon name="chev" size={16}/></span>
+                    </button>
+                    <button className="dqa-i" onClick={()=>setTab("create")}>
+                      <span className="d-icirc"><DIcon name="palette" size={20}/></span>
+                      <span><span className="dqa-t">Pilih Tema</span><span className="dqa-h">{THEMES.length} tema di form Buat</span></span>
+                      <span className="d-chev"><DIcon name="chev" size={16}/></span>
+                    </button>
+                    <button className="dqa-i" onClick={()=>setTab("about")}>
+                      <span className="d-icirc"><DIcon name="info" size={20}/></span>
+                      <span><span className="dqa-t">Info CapsuleMe</span><span className="dqa-h">Cara kerja & fitur</span></span>
+                      <span className="d-chev"><DIcon name="chev" size={16}/></span>
+                    </button>
+                  </div>
+                </div>
+
+                <div className="dcard">
+                  <div className="dcard-h">
+                    <div className="dcard-t">Tema Populer</div>
+                    <button className="d-link" onClick={()=>setTab("create")}>Lihat Semua →</button>
+                  </div>
+                  <div className="dthemes">
+                    {popularThemes.map(t=>(
+                      <button key={t.id} className="dtheme" onClick={()=>setTab("create")}>
+                        <span className="dtheme-img" style={{background:t.bg}}>{THEME_PHOTOS[t.id] ? <img src={THEME_PHOTOS[t.id]} alt={t.label}/> : t.emoji}</span>
+                        <span className="dtheme-b">
+                          <span className="dtheme-n">{t.label}</span>
+                          <span className="dtheme-c">{t.n} capsule</span>
+                        </span>
+                      </button>
+                    ))}
+                  </div>
+                </div>
+              </div>
+            </div>
           </div>
         </div>
       )}
 
-      {tab==="create" && <CreateForm setCapsules={setCapsules} onSuccess={()=>{setShowSuccess(true);setTab("inbox");}} credits={credits} spendCredit={spendCredit}/>}
+      {tab==="create" && <CreateForm setCapsules={setCapsules} onSuccess={()=>{setShowSuccess(true);setTab("inbox");}} credits={credits} spendCredit={spendCredit} avatar={avatar} avatarErr={avatarErr} onPickAvatar={pickAvatar} onRemoveAvatar={removeAvatar}/>}
 
       {tab==="inbox" && (
         <div className="wrap">
@@ -1081,7 +1586,7 @@ function SenderApp({ accessCode }) {
                   const th=themeOf(c); const tl=timeLeft(c.openAt); const rt=rtOf(c);
                   return (
                     <div key={c.id} className="citem" style={{animationDelay:`${i*.05}s`}}>
-                      <div className="cico">{th.emoji}</div>
+                      <div className="cico">{THEME_PHOTOS[th.id] ? <img src={THEME_PHOTOS[th.id]} alt=""/> : th.emoji}</div>
                       <div className="cinf">
                         <div className="c-to">{rt.icon} {rt.label}</div>
                         <div className="c-name">{c.to}</div>
@@ -1302,16 +1807,46 @@ function SenderAccessGate({ onLogin }) {
   if (showDaftar) return <FormMintaAkses onBack={()=>setShowDaftar(false)}/>;
 
   return (
-    <div className="admin-login-pg">
+    <div className="admin-login-pg sender-gate">
       <style>{css}</style>
+      <div className="gate-bg" aria-hidden="true"/>
+      <div className="gate-bokeh" aria-hidden="true"/>
+      <svg className="gate-clock" viewBox="0 0 400 400" aria-hidden="true" fill="none" stroke="#D9A441">
+        <circle cx="200" cy="200" r="186" strokeWidth="6" opacity=".55"/>
+        <circle cx="200" cy="200" r="168" strokeWidth="1.5" opacity=".45"/>
+        <circle cx="200" cy="200" r="120" strokeWidth="1" opacity=".25"/>
+        {["XII","I","II","III","IIII","V","VI","VII","VIII","IX","X","XI"].map((n,i)=>{
+          const a=(i*30-90)*Math.PI/180;
+          return <text key={n} x={200+142*Math.cos(a)} y={200+142*Math.sin(a)+8} textAnchor="middle" fill="#D9A441" stroke="none" opacity=".6" style={{font:"600 24px 'Cormorant Garamond',serif"}}>{n}</text>;
+        })}
+        {Array.from({length:60}).map((_,i)=>{
+          const a=i*6*Math.PI/180, r1=i%5?162:156;
+          return <line key={i} x1={200+r1*Math.cos(a)} y1={200+r1*Math.sin(a)} x2={200+168*Math.cos(a)} y2={200+168*Math.sin(a)} strokeWidth={i%5?1:2.5} opacity=".5"/>;
+        })}
+        <line x1="200" y1="200" x2="148" y2="120" strokeWidth="6" strokeLinecap="round" opacity=".7"/>
+        <line x1="200" y1="200" x2="282" y2="152" strokeWidth="3.5" strokeLinecap="round" opacity=".7"/>
+        <circle cx="200" cy="200" r="9" fill="#D9A441" opacity=".7"/>
+      </svg>
+      <div className="gate-quote" aria-hidden="true">
+        “Setiap pesan<br/>adalah kenangan<br/>untuk masa depan”
+        <svg width="150" height="46" viewBox="0 0 150 46" fill="none" stroke="#E9B956" strokeWidth="2" strokeLinecap="round">
+          <path d="M4 14 C 50 4, 100 2, 146 6"/>
+          <path d="M40 40 c-8-6-16-12-12-20 c3-5 10-4 12 2 c2-6 9-7 12-2 c4 8-4 14-12 20z"/>
+        </svg>
+      </div>
       <div className="login-card">
-        <img className="login-brand-logo" src="/capsuleme-logo.png" alt="CapsuleMe"/>
-        <div className="login-ttl">Akses Pengirim</div>
+        <div className="gate-logo"><img src="/capsuleme-logo.png" alt="CapsuleMe"/></div>
+        <div className="login-ttl">Akses <em>Pengirim</em></div>
         <div className="login-sub">Masukkan kode akses untuk membuat dan mengirim capsule.</div>
-        <input className="login-inp" type={showCode ? "text" : "password"}
-          placeholder="Kode akses (contoh: CM-XXXXXX)" value={code}
-          onChange={e=>setCode(e.target.value)}
-          onKeyDown={e=>e.key==="Enter"&&tryLogin()} disabled={loading}/>
+        <div className="gate-inp-wrap">
+          <span className="gate-inp-ico" aria-hidden="true">
+            <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><circle cx="7.5" cy="15.5" r="4.5"/><path d="M10.7 12.3 20 3"/><path d="m16 7 3 3"/><path d="m18.5 4.5 2 2"/></svg>
+          </span>
+          <input className="login-inp" type={showCode ? "text" : "password"}
+            placeholder="Kode akses (contoh: CM-XXXXXX)" value={code}
+            onChange={e=>setCode(e.target.value)}
+            onKeyDown={e=>e.key==="Enter"&&tryLogin()} disabled={loading}/>
+        </div>
         <button type="button" className="login-show" aria-pressed={showCode}
           onClick={()=>setShowCode(v=>!v)}>
           {showCode ? "🙈 Sembunyikan kode" : "👁 Tampilkan kode"}
@@ -1354,8 +1889,10 @@ function FormMintaAkses({ onBack }) {
   }
 
   if (sukses) return (
-    <div className="admin-login-pg">
+    <div className="admin-login-pg sender-gate">
       <style>{css}</style>
+      <div className="gate-bg" aria-hidden="true"/>
+      <div className="gate-bokeh" aria-hidden="true"/>
       <div className="login-card">
         <div style={{fontSize:46,marginBottom:14}}>✅</div>
         <div className="login-ttl">Pengajuan Terkirim</div>
@@ -1369,9 +1906,11 @@ function FormMintaAkses({ onBack }) {
   );
 
   return (
-    <div className="admin-login-pg">
+    <div className="admin-login-pg sender-gate">
       <style>{css}</style>
-      <div className="login-card" style={{maxWidth:420}}>
+      <div className="gate-bg" aria-hidden="true"/>
+      <div className="gate-bokeh" aria-hidden="true"/>
+      <div className="login-card" style={{maxWidth:460}}>
         <img className="login-brand-logo" src="/capsuleme-logo.png" alt="CapsuleMe"/>
         <div className="login-ttl">Ajukan Akses</div>
         <div className="login-sub">Isi data berikut. Kami kirim kode akses via email.</div>
@@ -1413,13 +1952,19 @@ export default function App() {
   )); // "sender" | "admin" | "demo-receiver"
   const [senderAccess,setSenderAccess]=useState(() => sessionStorage.getItem("timecapsule_sender_access") || "");
 
+  function handleSenderLogout() {
+    sessionStorage.removeItem("capsuleme_sender");
+    sessionStorage.removeItem("timecapsule_sender_access");
+    setSenderAccess("");
+  }
+
   // Simulasi: tombol hidden untuk demo admin & receiver
   return (
     <>
       {receiverSlug && <ReceiverRoute slug={receiverSlug}/>}
       {!receiverSlug && (
         <>
-      {page==="sender" && (senderAccess ? <SenderApp accessCode={senderAccess}/> : <SenderAccessGate onLogin={setSenderAccess}/>)}
+      {page==="sender" && (senderAccess ? <SenderApp accessCode={senderAccess} onLogout={handleSenderLogout}/> : <SenderAccessGate onLogin={setSenderAccess}/>)}
       {page==="admin" && <AdminPage/>}
       {page==="demo-receiver" && (
         <>
@@ -1433,19 +1978,6 @@ export default function App() {
         </>
       )}
 
-      {/* DEMO SWITCHER — hanya untuk preview, tidak ada di produksi */}
-      {process.env.NODE_ENV === "development" && <div style={{position:"fixed",bottom:0,left:0,right:0,background:"rgba(15,14,12,.92)",borderTop:"1px solid rgba(201,168,76,.2)",padding:"8px 16px",display:"flex",alignItems:"center",justifyContent:"center",gap:8,zIndex:500,flexWrap:"wrap"}}>
-        <span style={{fontSize:10,color:"#6B6560",fontWeight:600,textTransform:"uppercase",letterSpacing:1}}>Preview Mode:</span>
-        <button onClick={()=>setPage("sender")} style={{padding:"5px 12px",borderRadius:6,border:"1.5px solid",borderColor:page==="sender"?"#C9A84C":"#374151",background:page==="sender"?"#C9A84C":"transparent",color:page==="sender"?"#0F0E0C":"#9A9089",fontSize:11,fontWeight:600,cursor:"pointer",fontFamily:"'Outfit',sans-serif"}}>
-          ✉️ Pengirim
-        </button>
-        <button onClick={()=>setPage("demo-receiver")} style={{padding:"5px 12px",borderRadius:6,border:"1.5px solid",borderColor:page==="demo-receiver"?"#10B981":"#374151",background:page==="demo-receiver"?"#10B981":"transparent",color:page==="demo-receiver"?"#fff":"#9A9089",fontSize:11,fontWeight:600,cursor:"pointer",fontFamily:"'Outfit',sans-serif"}}>
-          🎁 Penerima
-        </button>
-        <button onClick={()=>setPage("admin")} style={{padding:"5px 12px",borderRadius:6,border:"1.5px solid",borderColor:page==="admin"?"#6B7280":"#374151",background:page==="admin"?"#374151":"transparent",color:page==="admin"?"#F9FAFB":"#9A9089",fontSize:11,fontWeight:600,cursor:"pointer",fontFamily:"'Outfit',sans-serif"}}>
-          🔧 Admin (pw: timecapsule2025)
-        </button>
-      </div>}
     </>
   );
 }

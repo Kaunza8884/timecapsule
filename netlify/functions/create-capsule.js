@@ -42,6 +42,14 @@ exports.handler = async (event) => {
   if (!sender) return json(403, { error: "Pengirim tidak ditemukan" });
   if (sender.credits < recipients.length) return json(402, { error: "Kredit tidak cukup", credits: sender.credits, needed: recipients.length });
 
+  // Logo/foto pengirim: hanya data URL gambar kecil yang diterima.
+  const avatar =
+    typeof capsule.avatar === "string" &&
+    /^data:image\/(png|jpeg|webp);base64,/.test(capsule.avatar) &&
+    capsule.avatar.length <= 150000
+      ? capsule.avatar
+      : "";
+
   const insertCapsules = recipients.map((recipient) => {
     const id = `${Date.now()}-${Math.random().toString(36).slice(2, 8)}`;
     const firstName = String(recipient.name || "penerima").trim().split(/\s+/)[0].toLowerCase();
@@ -59,15 +67,28 @@ exports.handler = async (event) => {
       slug,
       recipient_url: `${process.env.SITE_URL.replace(/\/$/, "")}/untuk/${slug}`,
       status: "scheduled",
+      ...(avatar ? { sender_avatar: avatar } : {}),
     };
   });
 
-  const capsuleRes = await fetch(`${supabaseUrl}/rest/v1/capsules`, {
-    method: "POST",
-    headers: { ...headers, Prefer: "return=representation" },
-    body: JSON.stringify(insertCapsules),
-  });
-  if (!capsuleRes.ok) return json(500, { error: "Gagal menyimpan capsule", detail: await capsuleRes.text() });
+  const insert = (rows) =>
+    fetch(`${supabaseUrl}/rest/v1/capsules`, {
+      method: "POST",
+      headers: { ...headers, Prefer: "return=representation" },
+      body: JSON.stringify(rows),
+    });
+
+  let capsuleRes = await insert(insertCapsules);
+  if (!capsuleRes.ok) {
+    const detail = await capsuleRes.text();
+    // Kolom sender_avatar belum ada di tabel capsules: simpan tanpa logo supaya capsule tetap terkirim.
+    if (avatar && detail.includes("sender_avatar")) {
+      capsuleRes = await insert(insertCapsules.map(({ sender_avatar, ...row }) => row));
+      if (!capsuleRes.ok) return json(500, { error: "Gagal menyimpan capsule", detail: await capsuleRes.text() });
+    } else {
+      return json(500, { error: "Gagal menyimpan capsule", detail });
+    }
+  }
 
   const updateCredits = await fetch(`${supabaseUrl}/rest/v1/senders?id=eq.${sender.id}`, {
     method: "PATCH",
