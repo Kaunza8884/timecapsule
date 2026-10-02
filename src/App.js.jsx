@@ -118,7 +118,7 @@ const timeLeft = iso => { const d=new Date(iso)-new Date(); if(d<=0)return null;
 const getCD    = iso => { const d=Math.max(0,new Date(iso)-new Date()); return {d:Math.floor(d/86400000),h:Math.floor((d%86400000)/3600000),m:Math.floor((d%3600000)/60000),s:Math.floor((d%60000)/1000)}; };
 const themeOf  = c   => THEMES.find(t=>t.id===c.theme)||THEMES[0];
 const rtOf     = c   => RECIPIENT_TYPES.find(r=>r.id===c.recipientType)||RECIPIENT_TYPES[0];
-const slugOf   = c   => `${c.to.split(" ")[0].toLowerCase()}-${c.id}`;
+const slugOf   = c   => c.slug || `${String(c.to||"").split(" ")[0].toLowerCase()}-${c.id}`;
 const recipientPath = c => `/untuk/${slugOf(c)}`;
 const recipientLink = c => c.recipientUrl || `${window.location.origin}${recipientPath(c)}`;
 function readCapsules(){ try { return JSON.parse(localStorage.getItem("timecapsule_capsules")) || DEMO_CAPSULES; } catch { return DEMO_CAPSULES; } }
@@ -139,6 +139,25 @@ function makeAvatar(file){
         const w=img.width*sc, h=img.height*sc;
         ctx.drawImage(img,(S-w)/2,(S-h)/2,w,h);
         resolve(cv.toDataURL("image/jpeg",0.86));
+      };
+      img.src=r.result;
+    };
+    r.readAsDataURL(file);
+  });
+}
+// Lampiran dikecilkan (sisi terpanjang 1600px, JPEG) supaya muat dikirim ke server dan tidak memenuhi penyimpanan browser.
+const MAX_ATTACH = 4;
+function shrinkImage(file, max=1600){
+  return new Promise((resolve,reject)=>{
+    const r=new FileReader(); r.onerror=reject;
+    r.onload=()=>{
+      const img=new Image(); img.onerror=reject;
+      img.onload=()=>{
+        const sc=Math.min(1, max/Math.max(img.width,img.height));
+        const cv=document.createElement("canvas"); cv.width=Math.round(img.width*sc); cv.height=Math.round(img.height*sc);
+        const ctx=cv.getContext("2d"); ctx.fillStyle="#fff"; ctx.fillRect(0,0,cv.width,cv.height);
+        ctx.drawImage(img,0,0,cv.width,cv.height);
+        resolve(cv.toDataURL("image/jpeg",0.82));
       };
       img.src=r.result;
     };
@@ -218,6 +237,7 @@ textarea{resize:vertical;min-height:90px;line-height:1.6;}
 .topt.on{border-color:#C9A84C;background:#FBF3E0;}
 .topt-e{font-size:17px;margin-bottom:2px;}
 .topt-l{font-size:9px;font-weight:500;}
+.topt-box{height:44px;border-radius:6px;margin-bottom:4px;display:flex;align-items:center;justify-content:center;font-size:22px;}
 .topt-ph{display:block;width:100%;height:44px;object-fit:cover;border-radius:6px;margin-bottom:4px;}
 .cico{overflow:hidden;}
 .cico img{width:100%;height:100%;object-fit:cover;display:block;}
@@ -952,6 +972,7 @@ function LinkModal({ capsule, onClose, onPreview, onNotif }) {
             <button className="btn-main" onClick={onPreview}>👁️ Preview Tampilan Penerima</button>
             <button className="btn-main" style={{background:"#0F4C75"}} onClick={onNotif}>📬 Preview Notifikasi Email & WA</button>
           </div>
+          {capsule.localOnly && <p style={{marginTop:10,fontSize:11,color:"#B45309",background:"#FFFBEB",border:"1px solid #FDE68A",borderRadius:8,padding:"8px 10px",textAlign:"center"}}>Capsule ini hanya tersimpan di perangkat ini karena server tidak tersedia saat dibuat. Link belum bisa dibuka dari perangkat lain.</p>}
           <p style={{marginTop:10,fontSize:10,color:"#6B6560",textAlign:"center"}}>Penerima tidak perlu login. Tidak ada data yang diminta.</p>
         </div>
       </div>
@@ -966,7 +987,17 @@ function ReceiverPage({ capsule, onBack }) {
   const [showReport,setShowReport]=useState(false);
   const theme = themeOf(capsule);
 
-  useEffect(()=>{ const t=setInterval(()=>setCd(getCD(capsule.openAt)),1000); return()=>clearInterval(t); },[capsule.openAt]);
+  // Data capsule bisa berganti (cache lokal -> data server): hitung ulang status selama belum dibuka.
+  useEffect(()=>{ setPhase(p=>(p==="locked"||p==="ready") ? (isReady(capsule.openAt)?"ready":"locked") : p); setCd(getCD(capsule.openAt)); },[capsule.openAt]);
+  // Hitung mundur hanya berjalan saat terkunci. Begitu waktunya tiba: nol, jadi siap, lalu berhenti.
+  useEffect(()=>{
+    if (phase!=="locked") return;
+    const t=setInterval(()=>{
+      setCd(getCD(capsule.openAt));
+      if (isReady(capsule.openAt)) { clearInterval(t); setPhase("ready"); }
+    },1000);
+    return()=>clearInterval(t);
+  },[capsule.openAt,phase]);
   function doOpen(){ setPhase("opening"); setTimeout(()=>setPhase("opened"),2200); }
 
   const senderLabel = capsule.company || rtOf(capsule).label;
@@ -1055,7 +1086,7 @@ function ReceiverPage({ capsule, onBack }) {
 }
 
 /* ═══════════════════ CREATE FORM ═══════════════════ */
-function CreateForm({ setCapsules, onSuccess, credits, spendCredit, avatar, avatarErr, onPickAvatar, onRemoveAvatar }) {
+function CreateForm({ setCapsules, onSuccess, credits, spendCredit, onServerCredits, avatar, avatarErr, onPickAvatar, onRemoveAvatar }) {
   const [form,setForm]=useState({to:"",email:"",from:"",company:"",message:"",openAt:"",theme:"birthday",recipientType:"personal",msgMode:"tulis"});
   const [images,setImages]=useState([]); const [fileErr,setFileErr]=useState(""); const [selTpl,setSelTpl]=useState(null);
   const [sendErr,setSendErr]=useState(""); const [submitting,setSubmitting]=useState(false);
@@ -1066,42 +1097,62 @@ function CreateForm({ setCapsules, onSuccess, credits, spendCredit, avatar, avat
 
   function handleUpload(e) {
     setFileErr("");
-    Array.from(e.target.files).forEach(f=>{ const err=validateFile(f); if(err){setFileErr(err);return;} const r=new FileReader(); r.onload=ev=>setImages(p=>[...p,{url:ev.target.result}]); r.readAsDataURL(f); });
+    Array.from(e.target.files).forEach(f=>{
+      const err=validateFile(f); if(err){setFileErr(err);return;}
+      shrinkImage(f)
+        .then(url=>setImages(p=>{ if(p.length>=MAX_ATTACH){ setFileErr(`Maksimal ${MAX_ATTACH} gambar per capsule.`); return p; } return [...p,{url}]; }))
+        .catch(()=>setFileErr("Gambar tidak bisa dibaca. Coba file lain."));
+    });
     e.target.value="";
   }
 
   async function send() {
-    if (!canSend) return;
+    if (!canSend || submitting) return;
     setSendErr("");
     setSubmitting(true);
-    if (!spendCredit()) { setSubmitting(false); return; }
-    const c = { id:Date.now(), from:form.from||"Pengirim", company:form.company, to:form.to, email:form.email, message:form.message, theme:form.theme, openAt:form.openAt, images:images.map(i=>i.url), recipientType:form.recipientType, avatar:avatar||"" };
-    if (form.email && form.email.includes("@")) {
-      try {
-        const res = await fetch("/.netlify/functions/create-capsule", {
-          method: "POST",
-          headers: {"Content-Type":"application/json"},
-          body: JSON.stringify({
-            accessCode: sessionStorage.getItem("timecapsule_sender_access"),
-            capsule: c,
-            recipients: [{ name: form.to, email: form.email }],
-          }),
-        });
-        if (res.ok) {
-          const data = await res.json();
-          const saved = data.capsules?.[0];
-          if (saved?.recipient_url) c.recipientUrl = saved.recipient_url;
-          if (typeof data.sisa === "number") {
-            const s = JSON.parse(sessionStorage.getItem("capsuleme_sender") || "{}");
-            sessionStorage.setItem("capsuleme_sender", JSON.stringify({ ...s, sisa:data.sisa, total:data.total, used:data.used }));
-          }
-        } else if (res.status !== 501) {
-          const data = await res.json().catch(()=>({error:"Gagal menyimpan ke backend"}));
-          setSendErr(data.error || "Gagal menyimpan ke backend. Capsule tetap dibuat sebagai demo lokal.");
-        }
-      } catch {
-        setSendErr("Backend belum tersedia. Capsule dibuat sebagai demo lokal.");
+    const contact = form.email.trim();
+    // Tanggal buka disimpan lengkap dengan zona waktu, supaya server dan penerima membaca jam yang sama.
+    const c = { id:Date.now(), from:form.from||"Pengirim", company:form.company, to:form.to.trim(), email:contact, message:form.message, theme:form.theme, openAt:new Date(form.openAt).toISOString(), images:images.map(i=>i.url), recipientType:form.recipientType, avatar:avatar||"" };
+    // Semua capsule dikirim ke server. Email/WA hanya kontak, bukan syarat penyimpanan.
+    let serverDown = false;
+    try {
+      const res = await fetch("/.netlify/functions/create-capsule", {
+        method: "POST",
+        headers: {"Content-Type":"application/json"},
+        body: JSON.stringify({
+          accessCode: sessionStorage.getItem("timecapsule_sender_access"),
+          capsule: c,
+          recipients: [{ name: c.to, email: contact }],
+        }),
+      });
+      const isJson = (res.headers.get("content-type")||"").includes("application/json");
+      const data = isJson ? await res.json().catch(()=>null) : null;
+      // Sisa token selalu mengikuti angka dari server.
+      if (data && typeof data.sisa === "number") {
+        const s = JSON.parse(sessionStorage.getItem("capsuleme_sender") || "{}");
+        sessionStorage.setItem("capsuleme_sender", JSON.stringify({ ...s, sisa:data.sisa, total:data.total, used:data.used }));
+        onServerCredits && onServerCredits(data.sisa);
       }
+      if (res.ok && data && data.ok) {
+        // Slug dan link dari server adalah satu-satunya link resmi capsule ini.
+        const saved = data.capsules?.[0] || {};
+        if (saved.id) c.serverId = saved.id;
+        if (saved.slug) c.slug = saved.slug;
+        if (saved.recipient_url) c.recipientUrl = saved.recipient_url;
+      } else if (res.status === 404 || res.status === 501 || (res.ok && !isJson)) {
+        serverDown = true;
+      } else {
+        setSendErr((data && data.error) || "Gagal menyimpan capsule. Token tidak dipotong. Coba lagi.");
+        setSubmitting(false);
+        return;
+      }
+    } catch {
+      serverDown = true;
+    }
+    if (serverDown) {
+      // Server tidak tersedia (mis. saat npm start): simpan di perangkat ini saja sebagai cadangan.
+      if (!spendCredit()) { setSubmitting(false); return; }
+      c.localOnly = true;
     }
     setCapsules(p=>[c,...p]); setForm(f=>({...f,to:"",email:"",message:"",openAt:""})); setImages([]); setSelTpl(null); onSuccess();
     setSubmitting(false);
@@ -1145,7 +1196,7 @@ function CreateForm({ setCapsules, onSuccess, credits, spendCredit, avatar, avat
       <div className="card" style={{animationDelay:".08s"}}>
         <div className="card-ttl">🎨 Tema — {THEMES.length} pilihan</div><div className="card-sub">Pilih tema sesuai momen</div>
         <div className="theme-grid">
-          {THEMES.map(t=><div key={t.id} className={`topt ${form.theme===t.id?"on":""}`} onClick={()=>{setForm(f=>({...f,theme:t.id}));setSelTpl(null);}}>{THEME_PHOTOS[t.id] ? <img className="topt-ph" src={THEME_PHOTOS[t.id]} alt=""/> : <div className="topt-e">{t.emoji}</div>}<div className="topt-l">{t.label}</div></div>)}
+          {THEMES.map(t=><div key={t.id} className={`topt ${form.theme===t.id?"on":""}`} onClick={()=>{setForm(f=>({...f,theme:t.id}));setSelTpl(null);}}>{THEME_PHOTOS[t.id] ? <img className="topt-ph" src={THEME_PHOTOS[t.id]} alt=""/> : <div className="topt-e topt-box" style={{background:t.bg}}>{t.emoji}</div>}<div className="topt-l">{t.label}</div></div>)}
         </div>
       </div>
 
@@ -1170,7 +1221,7 @@ function CreateForm({ setCapsules, onSuccess, credits, spendCredit, avatar, avat
 
         <div className="fg" style={{marginTop:13,marginBottom:0}}>
           <label>Lampiran Gambar (opsional)</label>
-          <div className="upzone" onClick={()=>fileRef.current.click()}><div style={{fontSize:20,marginBottom:4}}>🖼️</div><div style={{fontSize:11,color:"#6B6560"}}>Klik upload · <strong style={{color:"#C9A84C"}}>JPG, PNG, GIF, WEBP</strong> · max 5MB</div></div>
+          <div className="upzone" onClick={()=>fileRef.current.click()}><div style={{fontSize:20,marginBottom:4}}>🖼️</div><div style={{fontSize:11,color:"#6B6560"}}>Klik upload · <strong style={{color:"#C9A84C"}}>JPG, PNG, GIF, WEBP</strong> · max 5MB · maks. {MAX_ATTACH} gambar</div></div>
           <div className="up-warn">🚫 Upload video tidak diizinkan. Hanya gambar.</div>
           {fileErr && <div className="file-err">⚠️ {fileErr}</div>}
           <input ref={fileRef} type="file" accept="image/jpeg,image/png,image/gif,image/webp" multiple style={{display:"none"}} onChange={handleUpload}/>
@@ -1328,7 +1379,11 @@ function DIcon({ name, size=20, sw=1.8 }) {
 function SenderApp({ accessCode, onLogout }) {
   const [tab,setTab]=useState("home");
   const [capsules,setCapsules]=useState(readCapsules);
-  const [credits,setCredits]=useState(() => Number(localStorage.getItem("timecapsule_sender_credits")) || DEFAULT_CREDITS);
+  // credits adalah cermin sisa token dari Supabase (sender.sisa). Angka lokal hanya dipakai kalau data pengirim belum ada.
+  const [credits,setCredits]=useState(() => {
+    try { const s=JSON.parse(sessionStorage.getItem("capsuleme_sender")||"{}"); if (typeof s.sisa==="number") return s.sisa; } catch {}
+    return Number(localStorage.getItem("timecapsule_sender_credits")) || DEFAULT_CREDITS;
+  });
   const [showSuccess,setShowSuccess]=useState(false);
   const [linkModal,setLinkModal]=useState(null);
   const [notifModal,setNotifModal]=useState(null);
@@ -1401,7 +1456,13 @@ function SenderApp({ accessCode, onLogout }) {
     </header>
   );
 
-  useEffect(()=>{ localStorage.setItem("timecapsule_capsules", JSON.stringify(capsules)); },[capsules]);
+  // localStorage adalah cache/cadangan. Kalau penuh, gambar capsule yang sudah ada di server tidak ikut disimpan.
+  useEffect(()=>{
+    try { localStorage.setItem("timecapsule_capsules", JSON.stringify(capsules)); }
+    catch {
+      try { localStorage.setItem("timecapsule_capsules", JSON.stringify(capsules.map(x=>x.slug?{...x,images:[]}:x))); } catch {}
+    }
+  },[capsules]);
   useEffect(()=>{ localStorage.setItem("timecapsule_sender_credits", String(credits)); },[credits]);
 
   function spendCredit() {
@@ -1575,7 +1636,7 @@ function SenderApp({ accessCode, onLogout }) {
         </div>
       )}
 
-      {tab==="create" && <CreateForm setCapsules={setCapsules} onSuccess={()=>{setShowSuccess(true);setTab("inbox");}} credits={credits} spendCredit={spendCredit} avatar={avatar} avatarErr={avatarErr} onPickAvatar={pickAvatar} onRemoveAvatar={removeAvatar}/>}
+      {tab==="create" && <CreateForm setCapsules={setCapsules} onSuccess={()=>{setShowSuccess(true);setTab("inbox");}} credits={credits} spendCredit={spendCredit} onServerCredits={setCredits} avatar={avatar} avatarErr={avatarErr} onPickAvatar={pickAvatar} onRemoveAvatar={removeAvatar}/>}
 
       {tab==="inbox" && (
         <div className="wrap">

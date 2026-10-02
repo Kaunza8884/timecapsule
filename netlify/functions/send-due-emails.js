@@ -61,7 +61,8 @@ exports.handler = async (event) => {
   const results = [];
 
   for (const capsule of dueCapsules) {
-    if (!capsule.recipient_email) continue;
+    // Kontak penerima bisa berupa nomor WA atau kosong; email hanya dikirim ke alamat email.
+    if (!capsule.recipient_email || !String(capsule.recipient_email).includes("@")) continue;
     const emailRes = await sendEmail(capsule);
     if (emailRes.ok) {
       await supabaseFetch(`capsules?id=eq.${capsule.id}`, {

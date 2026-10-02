@@ -4,6 +4,41 @@ const json = (statusCode, body) => ({
   body: JSON.stringify(body),
 });
 
+// Lampiran gambar ada di Supabase Storage (bucket privat), folder <id capsule>/.
+const BUCKET = "capsule-images";
+const SIGNED_URL_SECONDS = 60 * 60 * 6;
+
+// Capsule lama atau capsule tanpa lampiran mengembalikan daftar kosong, tidak pernah galat.
+async function loadImages(base, headers, capsuleId) {
+  try {
+    const listRes = await fetch(`${base}/storage/v1/object/list/${BUCKET}`, {
+      method: "POST",
+      headers: { ...headers, "Content-Type": "application/json" },
+      body: JSON.stringify({ prefix: `${capsuleId}/`, limit: 20, sortBy: { column: "name", order: "asc" } }),
+    });
+    if (!listRes.ok) return [];
+    const files = await listRes.json();
+    const paths = (Array.isArray(files) ? files : [])
+      .filter((file) => file && file.name && /\.(jpg|png|webp)$/.test(file.name))
+      .map((file) => `${capsuleId}/${file.name}`);
+    if (!paths.length) return [];
+
+    const signRes = await fetch(`${base}/storage/v1/object/sign/${BUCKET}`, {
+      method: "POST",
+      headers: { ...headers, "Content-Type": "application/json" },
+      body: JSON.stringify({ expiresIn: SIGNED_URL_SECONDS, paths }),
+    });
+    if (!signRes.ok) return [];
+    const signed = await signRes.json();
+    return (Array.isArray(signed) ? signed : [])
+      .map((item) => item && (item.signedURL || item.signedUrl))
+      .filter(Boolean)
+      .map((path) => `${base}/storage/v1${path.startsWith("/") ? "" : "/"}${path}`);
+  } catch {
+    return [];
+  }
+}
+
 exports.handler = async (event) => {
   const slug = event.queryStringParameters?.slug;
   if (!slug) return json(400, { error: "Slug wajib diisi" });
@@ -27,6 +62,7 @@ exports.handler = async (event) => {
 
   return json(200, {
     id: row.id,
+    slug: row.slug,
     from: row.from_name,
     company: row.company,
     to: row.recipient_name,
@@ -34,7 +70,7 @@ exports.handler = async (event) => {
     message: row.message,
     theme: row.theme,
     openAt: row.open_at,
-    images: [],
+    images: await loadImages(base, headers, row.id),
     avatar: row.sender_avatar || "",
     recipientType: row.company ? "company" : "personal",
     recipientUrl: row.recipient_url,
